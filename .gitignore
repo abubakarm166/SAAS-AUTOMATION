@@ -1,0 +1,41 @@
+# Secrets / credentials (MUST NOT COMMIT)
+information
+*credentials*
+*.csv
+*.env
+.env.*
+*.pem
+*.p12
+*.key
+*.crt
+
+# Lock/temp files
+.~lock.*
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Generated outputs from current script
+*.pdf
+*.xlsx
+full_screenshot_pyautogui_.png
+
+# Large binaries
+Snapshot.zip
+Snapshot/
+
