@@ -12,6 +12,7 @@ import cv2
 import pyautogui
 from pywinauto import Application, Desktop
 import ast
+import copy
 import math
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import (
@@ -1064,22 +1065,15 @@ listings=listings.copy()
 '''Ensure proper null value assignment'''
 for i in range(len(listings)):    
     if pd.isna(listings['squareFootage'][i]) == True:
-        #square_footage = np.nan
-        listings['squareFootage'][i] = np.nan
+        listings.loc[i, 'squareFootage'] = np.nan
     elif np.isnan(listings['squareFootage'][i]) == True:
-        #square_footage = np.nan
-        listings['squareFootage'][i] = np.nan
-    else:
-        pass
-        #square_footage = listings['squareFootage'][i]
+        listings.loc[i, 'squareFootage'] = np.nan
 
 for i in range(len(listings)):    
     if pd.isna(listings['features_unitCount'][i]) == True:
-        listings['features_unitCount'][i] = 1
+        listings.loc[i, 'features_unitCount'] = 1
     elif np.isnan(listings['features_unitCount'][i]) == True:
-        listings['features_unitCount'][i] = 1
-    else:
-        pass
+        listings.loc[i, 'features_unitCount'] = 1
 
 for i in range(len(listings)):    
     if pd.isna(listings['price'][i]) == True:
@@ -1362,34 +1356,33 @@ for i in sales_zip_col:
 listings=listings.copy()
 
 for i in range(len(listings)):
+    zip_code = listings['Zip'][i]
+    matched = False
     for j in range(len(zip_resp)):
-        try:
-            #if listings['Zip'][i] == zip_resp[j]:
-            if listings['Zip'][i] in zip_resp[j]:
-                listings['Zip_Response'][i] = zip_res_list[j]
-            elif listings['Zip'][i] not in zip_resp:
-                listings['Zip_Response'][i] = bdict
-                #pass
+        if zip_code == zip_resp[j]:
+            resp = zip_res_list[j]
+            if isinstance(resp, dict):
+                listings.at[i, 'Zip_Response'] = resp
             else:
-                pass
-        except:
-            listings['Zip_Response'][i] = bdict
+                listings.at[i, 'Zip_Response'] = copy.deepcopy(bdict)
+            matched = True
+            break
+    if not matched or listings.at[i, 'Zip_Response'] is None:
+        listings.at[i, 'Zip_Response'] = copy.deepcopy(bdict)
 
 for i in range(len(listings)):
-    if "saleData" not in listings['Zip_Response'][i]:
-        listings['Zip_Response'][i]['saleData'] = bdict["saleData"]
-
-for i in range(len(listings)):
-    if "rentalData" not in listings['Zip_Response'][i]:
-        listings['Zip_Response'][i]['rentalData'] = bdict["rentalData"]
-
-for i in range(len(listings)):
-    if "id" not in listings['Zip_Response'][i]:
-        listings['Zip_Response'][i]['id'] = bdict["id"]
-
-for i in range(len(listings)):
-    if "zipCode" not in listings['Zip_Response'][i]:
-        listings['Zip_Response'][i]['zipCode'] = bdict["zipCode"]
+    zr = listings.at[i, 'Zip_Response']
+    if zr is None or not isinstance(zr, dict):
+        zr = copy.deepcopy(bdict)
+    if "saleData" not in zr:
+        zr['saleData'] = bdict["saleData"]
+    if "rentalData" not in zr:
+        zr['rentalData'] = bdict["rentalData"]
+    if "id" not in zr:
+        zr['id'] = bdict["id"]
+    if "zipCode" not in zr:
+        zr['zipCode'] = bdict["zipCode"]
+    listings.at[i, 'Zip_Response'] = zr
 
 
 '''Generate Key Lists for Sales and Rental Dicts'''
@@ -2140,98 +2133,105 @@ for i in range(len(listings)):
     '------------------------------------------------'
     '''Bar Chart Axis Setting'''
     mm_cols = [listings[b][i] for b in bar_names_valid]
-    
-    min_val = round(math.floor((min(mm_cols) - (0.25 *min(mm_cols))))) 
-    max_val = round(math.ceil((max(mm_cols) + (0.25 *max(mm_cols)))))
 
-    vals = np.linspace(min_val, max_val, num=10)[1:-1]  # drop endpoints [web:213][web:221]
-    ticks = tuple(int(round(v)) for v in vals) 
-    ticks_l = [int(round(v)) for v in vals]     
-
-    filename="hbar_custom2.pdf"
-    cats=bar_labels_valid
-    values=[round(listings[col][i], 2) for col in bar_names_valid]
-    values=[0.001 if x == 0.00 else x for x in values]
-    title="Zip Code Benchmark Comparison (% Above or Below Baseline)"
-    title_font="Helvetica-Bold"
-    body_font="Helvetica"
-    title_font_size=12
-    axis_font_size=8
-    tick_values=ticks_l        # list of tick positions, or None for auto
-    value_range=(min_val, max_val)        # (min, max) or None
-    pos_bar_color=colors.green
-    neg_bar_color=colors.red
-#):
-    if cats is None:
-        cats = ["No Valid Attributes", "No Valid Attributes", "No Valid Attributes"]
-    if values is None:
-        values = [-1, 0, 1]
-
-    #doc = SimpleDocTemplate(filename, pagesize=letter)
     story_bar = []
 
-    dw_width, dw_height = 400, 200
-    dw = Drawing(dw_width, dw_height)
+    if not mm_cols:
+        story_bar.append(Paragraph(
+            "Zip Code Benchmark Comparison: No valid benchmark data available for chart.",
+            styles["BodyText"]
+        ))
+    else:
+        min_val = round(math.floor((min(mm_cols) - (0.25 *min(mm_cols))))) 
+        max_val = round(math.ceil((max(mm_cols) + (0.25 *max(mm_cols)))))
 
-    chart_x = 50
-    chart_y = 0
-    chart_width = 375
-    chart_height = 14 * len(mm_cols)
+        vals = np.linspace(min_val, max_val, num=10)[1:-1]  # drop endpoints [web:213][web:221]
+        ticks = tuple(int(round(v)) for v in vals) 
+        ticks_l = [int(round(v)) for v in vals]     
 
-    # Centered title over chart
-    title_x = chart_x + chart_width / 2.0
-    title_y = chart_y + chart_height + 25
-    dw.add(String(
-        title_x,
-        title_y,
-        title,
-        textAnchor="middle",
-        fontName=title_font,
-        fontSize=title_font_size,
-    ))
+        filename="hbar_custom2.pdf"
+        cats=bar_labels_valid
+        values=[round(listings[col][i], 2) for col in bar_names_valid]
+        values=[0.001 if x == 0.00 else x for x in values]
+        title="Zip Code Benchmark Comparison (% Above or Below Baseline)"
+        title_font="Helvetica-Bold"
+        body_font="Helvetica"
+        title_font_size=12
+        axis_font_size=8
+        tick_values=ticks_l        # list of tick positions, or None for auto
+        value_range=(min_val, max_val)        # (min, max) or None
+        pos_bar_color=colors.green
+        neg_bar_color=colors.red
+    #):
+        if cats is None:
+            cats = ["No Valid Attributes", "No Valid Attributes", "No Valid Attributes"]
+        if values is None:
+            values = [-1, 0, 1]
 
-    bc = HorizontalBarChart()
-    bc.x = chart_x
-    bc.y = chart_y
-    bc.width = chart_width
-    bc.height = chart_height
-    bc.data = [values]
+        #doc = SimpleDocTemplate(filename, pagesize=letter)
 
-    # Categories on left
-    bc.categoryAxis.categoryNames = cats
-    bc.categoryAxis.labelAxisMode = "low"
-    bc.categoryAxis.labels.boxAnchor = "e"
-    bc.categoryAxis.labels.fontName = body_font
-    bc.categoryAxis.labels.fontSize = axis_font_size
+        dw_width, dw_height = 400, 200
+        dw = Drawing(dw_width, dw_height)
 
-    bc.barLabels.fontName = "Helvetica"
-    bc.barLabels.fontSize = 8
-    
-    bc.barLabelFormat = '%0.2f'
-    bc.barLabels.nudge = 20
+        chart_x = 50
+        chart_y = 0
+        chart_width = 375
+        chart_height = 14 * len(mm_cols)
 
-    # Value axis styling
-    bc.valueAxis.visibleTicks = 0          # remove small tick marks
-    bc.valueAxis.labels.fontName = body_font
-    bc.valueAxis.labels.fontSize = axis_font_size
+        # Centered title over chart
+        title_x = chart_x + chart_width / 2.0
+        title_y = chart_y + chart_height + 25
+        dw.add(String(
+            title_x,
+            title_y,
+            title,
+            textAnchor="middle",
+            fontName=title_font,
+            fontSize=title_font_size,
+        ))
 
-    if tick_values is not None:
-        bc.valueAxis.valueSteps = list(tick_values)
+        bc = HorizontalBarChart()
+        bc.x = chart_x
+        bc.y = chart_y
+        bc.width = chart_width
+        bc.height = chart_height
+        bc.data = [values]
 
-    if value_range is not None:
-        vmin, vmax = value_range
-        bc.valueAxis.valueMin = vmin
-        bc.valueAxis.valueMax = vmax
+        # Categories on left
+        bc.categoryAxis.categoryNames = cats
+        bc.categoryAxis.labelAxisMode = "low"
+        bc.categoryAxis.labels.boxAnchor = "e"
+        bc.categoryAxis.labels.fontName = body_font
+        bc.categoryAxis.labels.fontSize = axis_font_size
 
-    # Border around chart area
-    bc.strokeColor = colors.black
+        bc.barLabels.fontName = "Helvetica"
+        bc.barLabels.fontSize = 8
+        
+        bc.barLabelFormat = '%0.2f'
+        bc.barLabels.nudge = 20
 
-    # Bar colors parameterized
-    for p, v in enumerate(values):
-        bc.bars[(0, p)].fillColor = pos_bar_color if v >= 0 else neg_bar_color
+        # Value axis styling
+        bc.valueAxis.visibleTicks = 0          # remove small tick marks
+        bc.valueAxis.labels.fontName = body_font
+        bc.valueAxis.labels.fontSize = axis_font_size
 
-    dw.add(bc)
-    story_bar.append(dw)
+        if tick_values is not None:
+            bc.valueAxis.valueSteps = list(tick_values)
+
+        if value_range is not None:
+            vmin, vmax = value_range
+            bc.valueAxis.valueMin = vmin
+            bc.valueAxis.valueMax = vmax
+
+        # Border around chart area
+        bc.strokeColor = colors.black
+
+        # Bar colors parameterized
+        for p, v in enumerate(values):
+            bc.bars[(0, p)].fillColor = pos_bar_color if v >= 0 else neg_bar_color
+
+        dw.add(bc)
+        story_bar.append(dw)
     '------------------------------------------------'
     '''Story Generation - Financials/Characteristics/Zip'''
     
