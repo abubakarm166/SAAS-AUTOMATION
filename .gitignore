@@ -2,7 +2,9 @@
 information
 *credentials*
 *.csv
-
+.env
+*.env
+backend/.env
 .env.*
 *.pem
 *.p12
