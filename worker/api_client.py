@@ -27,7 +27,10 @@ class WorkerApiClient:
             raise RuntimeError("WORKER_API_KEY is required")
 
     def _headers(self) -> dict[str, str]:
-        return {"X-Worker-API-Key": self.api_key}
+        headers = {"X-Worker-API-Key": self.api_key}
+        if "ngrok" in self.base_url:
+            headers["ngrok-skip-browser-warning"] = "true"
+        return headers
 
     def claim_next_job(self) -> dict[str, Any] | None:
         response = requests.post(f"{self.base_url}/worker/jobs/claim", headers=self._headers(), timeout=30)
