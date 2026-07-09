@@ -579,7 +579,7 @@ for i in urls:
 
 '''Run and record API query results'''
 #Anonymize API key later
-headers = {"accept": "application/json", 'X-Api-Key': '3f9f929546ec49a1a0492c3e60b21c42'}
+headers = {"accept": "application/json", "X-Api-Key": os.getenv("RENTCAST_API_KEY", "3f9f929546ec49a1a0492c3e60b21c42")}
 
 res_list=[]
 err_list=[]
@@ -933,7 +933,7 @@ listings=listings.copy()
 
 '''Get Current Mortgage Rates'''
 mort_url = 'https://api.api-ninjas.com/v1/mortgagerate'
-mort_resp = requests.get(mort_url, headers={'X-Api-Key': 'TSAvRrTlv64VZgLilis3mw==ABBtOu8cv86Qfszh'})
+mort_resp = requests.get(mort_url, headers={"X-Api-Key": os.getenv("API_NINJAS_API_KEY", "TSAvRrTlv64VZgLilis3mw==ABBtOu8cv86Qfszh")})
 
 if mort_resp.status_code == requests.codes.ok:
     print(mort_resp.text)
@@ -2080,7 +2080,7 @@ for i in range(len(listings)):
     '------------------------------------------------'
     '''Create Street View Cover Sheet'''    
     lat_long = str(listings['latitude'][i]) + "," + str(listings['longitude'][i])
-    svpic=requests.get("https://maps.googleapis.com/maps/api/streetview?size=600x300&location=" + lat_long + "&heading=151.78&pitch=-0.76&key=AIzaSyA_5BoEzUmYM9NjthkUJx3u5ds7L1YA18M")
+    svpic=requests.get("https://maps.googleapis.com/maps/api/streetview?size=600x300&location=" + lat_long + "&heading=151.78&pitch=-0.76&key=" + os.getenv("GOOGLE_MAPS_API_KEY", "AIzaSyA_5BoEzUmYM9NjthkUJx3u5ds7L1YA18M"))
     img = Image.open(BytesIO(svpic.content))
     '----------------------'
     pdf_path = "title_and_image.pdf"
@@ -2549,41 +2549,7 @@ for i in range(len(listings)):
 '--------------------------------'
 
 '''Send pdf reports to email'''
-email_sender = 'hatemdj09@gmail.com'
-password = 'qkxc rptb wfrm tjdu'
-#email_receiver = 'hatemdj09@gmail.com'
-email_receiver = user_em
-subject = 'SnapShot Property Report'
-body = 'See the attached reports for your recently analyzed properties.'
-
-em = EmailMessage()
-em['From'] = email_sender
-em['To'] = user_em
-em['Subject'] = subject
-em.set_content(body)
-
-#Add pdfs
-for i in range(len(listings)):
-
-    if listings["formattedAddress"][i] is not None:
-        pdf_path = f'{listings["formattedAddress"][i]} Property Report.pdf'
-    else:
-        pdf_path = f'{listings["Address"][i]} Property Report.pdf'
-    
-    with open(pdf_path, 'rb') as f:
-        pdf_bytes = f.read()
-    
-    em.add_attachment(
-        pdf_bytes,
-        maintype='application',
-        subtype='pdf',
-        #filename=f'{listings["Address"][i]} Property Report.pdf'
-        filename=pdf_path
-    )
-
-#Add listings.xlsx
 listings_em=listings.copy()
-listings['medianDaysOnMarket_sales']
 listings_em=listings_em[["formattedAddress", "medianDaysOnMarket_rent", "totalListings_rent", 
                          "medianPricePerSquareFoot", "medianDaysOnMarket_sales", 
                          "totalListings_sales", "marketCapRate", "all_in_costs_baseline", 
@@ -2607,20 +2573,54 @@ listings_em=listings_em[["formattedAddress", "medianDaysOnMarket_rent", "totalLi
                          "max_purchase_price", "propertyTaxes_total", "propertyTaxes_year"]]
 
 listings_em.to_excel('Listings Report Data.xlsx')
-pdf_path = 'Listings Report Data.xlsx'
 
-with open(pdf_path, 'rb') as f:
-    pdf_bytes = f.read()
-    
-em.add_attachment(
-    pdf_bytes,
-    maintype='application',
-    subtype='pdf',
-    filename='Listings Report Data.xlsx'
-)
+if user_em and os.getenv("SNAPSHOT_SKIP_EMAIL", "false").lower() != "true":
+    email_sender = os.getenv("SMTP_USERNAME", "hatemdj09@gmail.com")
+    password = os.getenv("SMTP_PASSWORD", "qkxc rptb wfrm tjdu")
+    email_receiver = user_em
+    subject = 'SnapShot Property Report'
+    body = 'See the attached reports for your recently analyzed properties.'
 
-context = ssl.create_default_context()
-with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as smtp:
-    smtp.login(email_sender, password)
-    smtp.send_message(em)
+    em = EmailMessage()
+    em['From'] = email_sender
+    em['To'] = user_em
+    em['Subject'] = subject
+    em.set_content(body)
+
+    #Add pdfs
+    for i in range(len(listings)):
+
+        if listings["formattedAddress"][i] is not None:
+            pdf_path = f'{listings["formattedAddress"][i]} Property Report.pdf'
+        else:
+            pdf_path = f'{listings["Address"][i]} Property Report.pdf'
+        
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+        
+        em.add_attachment(
+            pdf_bytes,
+            maintype='application',
+            subtype='pdf',
+            filename=pdf_path
+        )
+
+    pdf_path = 'Listings Report Data.xlsx'
+
+    with open(pdf_path, 'rb') as f:
+        pdf_bytes = f.read()
+        
+    em.add_attachment(
+        pdf_bytes,
+        maintype='application',
+        subtype='pdf',
+        filename='Listings Report Data.xlsx'
+    )
+
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "465"))
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as smtp:
+        smtp.login(email_sender, password)
+        smtp.send_message(em)
 

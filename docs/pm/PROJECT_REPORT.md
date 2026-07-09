@@ -1,7 +1,7 @@
 # SnapShot SaaS — Project Status Report
 
 > **Living document** — update this file after each milestone, client delivery, or blockers change.  
-> **Last updated:** 2026-07-02  
+> **Last updated:** 2026-07-08  
 > **Project:** Dextersol / Hatem — Cloud-Hosted Automation SaaS Platform  
 > **Product name (in code):** SnapShot Property Report  
 > **Current phase:** Phase 1 — Pre-development / Kickoff  
@@ -15,7 +15,7 @@ The client (Hatem) has a working **Windows desktop automation tool** that analyz
 
 **Our job:** Wrap this tool in a multi-user SaaS product — auth, Stripe payments, cloud Windows workers, Chrome extension, web dashboard, and admin panel. **We are not rewriting the core automation logic.**
 
-Development has **not started yet**. Discovery and onboarding are largely complete. Stripe access is now available to the dev team.
+Development is **in progress**. EC2 spike complete; backend foundation scaffolded.
 
 ---
 
@@ -117,12 +117,13 @@ Chrome tab (auction listing page)
 | Receive tkinter field mapping | ✅ Done | Documented in `information` |
 | AWS console access | ✅ Done | IAM user created |
 | Stripe access | ✅ Done | Dev team logged in (2026-07-01) |
-| FastAPI backend + auth | ⬜ Not started | |
-| PostgreSQL schema | ⬜ Not started | |
-| Stripe integration | ⬜ Not started | |
+| FastAPI backend + auth | ✅ Done | `backend/app/` — signup, login, JWT, jobs API |
+| PostgreSQL schema | ✅ Done | `db/schema.sql` |
+| Stripe integration | ✅ Done | Checkout + webhooks tested locally |
+| Worker job processing (poll + claim) | 🟡 In progress | Dry-run worker; EC2 automation hook next |
 | Script refactor (split at line 484) | ⬜ Not started | |
 | Secrets → AWS Secrets Manager | ⬜ Not started | |
-| EC2 spike (1 job on 1 Windows instance) | ⬜ Not started | **Critical de-risk step** |
+| EC2 spike (1 job on 1 Windows instance) | ✅ Done | PDF/Excel OK; email pending client |
 
 **Phase 1 deliverable:** Working backend with auth + payments, demonstrable via API. No dashboard UI yet.
 
@@ -132,7 +133,7 @@ Chrome tab (auction listing page)
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Migrate script to Windows EC2 workers | ⬜ Not started | Highest technical risk |
+| Migrate script to Windows EC2 workers | 🟡 In progress | Spike done; worker runner scaffolded |
 | Redis + Celery job queue | ⬜ Not started | |
 | S3 storage for PDFs/Excel | ⬜ Not started | |
 | Replace tkinter with API parameters | ⬜ Not started | |
@@ -278,6 +279,21 @@ Week 4+
 - **Blocked:** Awaiting Stripe subscription plan details
 - **Blocked:** Awaiting client approval to begin Phase 1 build
 - **Next:** Send client kickoff message; begin repo setup once approved
+
+### 2026-07-08 — Worker integration started
+
+- **Done:** Worker API endpoints (`claim`, `complete`, `fail`)
+- **Done:** Worker runner (`worker/runner.py`) with dry-run mode for local testing
+- **Next:** Test full flow: create job → worker processes → job status `completed`
+- **Next:** Wire EC2 Windows automation into `worker/processor.py`
+
+### 2026-07-04 — Backend foundation started
+
+- **Done:** EC2 spike successful (automation + PDF/Excel on cloud Windows)
+- **Done:** PostgreSQL schema created (`db/schema.sql`)
+- **Done:** FastAPI backend scaffold (auth, jobs, Stripe billing stubs)
+- **Skipped for now:** Email delivery (waiting on client Gmail vs SES decision)
+- **Next:** Run PostgreSQL locally, test API endpoints, configure Stripe price ID
 
 ### 2026-07-02 — Phase 1 workspace + secrets baseline
 
