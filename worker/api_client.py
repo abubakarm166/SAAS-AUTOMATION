@@ -6,17 +6,26 @@ import requests
 
 
 def load_worker_env() -> None:
-    """Load env vars from backend/.env then repo root .env (files override shell)."""
+    """Load worker env: backend/.env as fallback, repo root .env wins."""
     root = Path(__file__).resolve().parents[1]
-    for env_path in (root / "backend" / ".env", root / ".env"):
+
+    def _apply_env_file(env_path: Path, override: bool) -> None:
         if not env_path.exists():
-            continue
+            return
         for line in env_path.read_text().splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, _, value = line.partition("=")
-            os.environ[key.strip()] = value.strip()
+            key = key.strip()
+            value = value.strip()
+            if override:
+                os.environ[key] = value
+            else:
+                os.environ.setdefault(key, value)
+
+    _apply_env_file(root / "backend" / ".env", override=False)
+    _apply_env_file(root / ".env", override=True)
 
 
 class WorkerApiClient:
