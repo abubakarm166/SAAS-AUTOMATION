@@ -663,10 +663,6 @@ listings['features_architectureType'] = [resp.get('features', {}).get('architect
 listings['features_viewType'] = [resp.get('features', {}).get('viewType', None) if isinstance(resp, dict) else None for resp in listings['API_Responses']]
 listings['formattedAddress'] = [resp.get('formattedAddress', None) if isinstance(resp, dict) else None for resp in listings['API_Responses']]
 
-type(listings['bathrooms'][1])
-type([resp.get('bedrooms', np.nan) if isinstance(resp, dict) else np.nan for resp in listings['API_Responses']][1])
-[resp.get('bedrooms', np.nan) if isinstance(resp, dict) else None for resp in listings['API_Responses']]
-
 history=[]
 history_date=[]
 history_event=[]
