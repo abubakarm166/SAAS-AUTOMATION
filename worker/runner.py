@@ -20,6 +20,11 @@ def run_once(client: WorkerApiClient) -> bool:
 
     try:
         output_rows, files = process_job(job)
+        from worker.s3_storage import s3_enabled, upload_job_files
+
+        if s3_enabled():
+            files = upload_job_files(job, files)
+            print(f"Uploaded {len(files)} file(s) to S3 for job {job_id}")
         result = client.complete_job(job_id, output_rows=output_rows, files=files)
         print(f"Job {job_id} completed with status={result.get('status')}")
     except Exception as exc:

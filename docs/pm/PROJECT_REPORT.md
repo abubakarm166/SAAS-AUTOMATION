@@ -1,108 +1,112 @@
 # SnapShot SaaS — Project Status Report
 
-> **Living document** — update this file after each milestone, client delivery, or blockers change.  
-> **Last updated:** 2026-07-08  
+> **Living document** — update Section 13 (Update Log) and Section 5 (Phase tables) after each milestone.  
+> **Last updated:** 2026-07-10  
 > **Project:** Dextersol / Hatem — Cloud-Hosted Automation SaaS Platform  
 > **Product name (in code):** SnapShot Property Report  
-> **Current phase:** Phase 1 — Pre-development / Kickoff  
-> **Overall status:** 🟡 Onboarding — awaiting final client confirmations to begin build
+> **Current phase:** Phase 2 — Cloud Automation Core (early)  
+> **Overall status:** 🟢 Major milestone — end-to-end cloud automation verified on Windows EC2
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary (for PM / client)
 
-The client (Hatem) has a working **Windows desktop automation tool** that analyzes real estate auction listings. It captures property addresses from Chrome, enriches them with RentCast and mortgage data, runs investment calculations, generates PDF reports + Excel, and emails results.
+We have successfully wrapped the client's Windows automation in a **multi-user SaaS backend** and proven that **real property reports** (PDF + Excel) can be generated on **AWS Windows EC2** when triggered via API — without Chrome capture or tkinter on the worker.
 
-**Our job:** Wrap this tool in a multi-user SaaS product — auth, Stripe payments, cloud Windows workers, Chrome extension, web dashboard, and admin panel. **We are not rewriting the core automation logic.**
+**What works today (demonstrable):**
+- User signup/login (JWT)
+- Job creation via API (addresses + financial inputs as JSON)
+- Windows EC2 worker polls API, claims job, runs headless automation
+- RentCast + API Ninjas + Google Street View + calculations + PDF/Excel
+- Job status returns `completed` with output row data in database
 
-Development is **in progress**. EC2 spike complete; backend foundation scaffolded.
+**What does not exist yet:**
+- No web dashboard or Chrome extension
+- No S3 file downloads via API (files land in temp folder on EC2 only)
+- API still runs on dev laptop + ngrok (not production AWS)
+- Email delivery not wired in cloud
+- Subscription webhooks need production hardening
+
+**Bottom line for client:** The hardest technical risk (running automation in the cloud) is **proven**. Next work is storage, production hosting, and user-facing UI.
 
 ---
 
-## 2. Project Goals
+## 2. Demonstrable Results (with evidence)
 
-| Goal | Description |
-|------|-------------|
-| Commercial SaaS | Sell subscriptions to multiple paying users |
-| Cloud execution | Run automation on AWS Windows EC2 (not user's local PC) |
-| Chrome extension | Users trigger jobs from their browser (Manifest V3) |
-| Web dashboard | Session history, cumulative data, charts, downloads |
-| Payments | Stripe subscriptions gate access to automation |
-| Security | All API keys in AWS Secrets Manager — never in code or extension |
+### 2.1 End-to-end API flow (local dev + ngrok)
+
+| Step | Result | How verified |
+|------|--------|--------------|
+| `POST /auth/signup` + `POST /auth/login` | ✅ Works | Postman — JWT returned |
+| `POST /jobs` (with Bearer token) | ✅ Works | Job created with `status: queued` |
+| Worker claims job | ✅ Works | `POST /worker/jobs/claim` → 200 |
+| Worker completes job | ✅ Works | `POST /worker/jobs/{id}/complete` → 200 |
+| `GET /jobs/{id}` | ✅ Works | `status: completed`, timestamps set |
+
+**Sample completed job:** `57d00746-7c36-412d-bfc2-a9965b396884` (2026-07-09)
+
+### 2.2 Windows EC2 headless automation (Phase 2 milestone)
+
+| Test | Address | Result |
+|------|---------|--------|
+| Dry-run (Linux) | Any | ✅ Simulated completion ~50ms |
+| Real automation (EC2) | `123 Main St, Richmond, KY 40475` | ✅ Completed (~7s) |
+| Real automation (EC2) | `2202 Clifton Ave, Baltimore, MD 21216` | ✅ Completed — PDF + Excel verified |
+
+**Validated outputs on EC2:**
+- `{address} Property Report.pdf` — property report with Street View, calculations, charts
+- `Listings Report Data.xlsx` — summary spreadsheet (same as desktop tool)
+
+**Test auction URL used:** https://www.ashlandauction.com/auctions/33350
+
+### 2.3 Earlier EC2 spike (manual / GUI mode)
+
+| Item | Result |
+|------|--------|
+| Chrome URL + OCR address capture | ✅ Works |
+| Tkinter confirm + inputs | ✅ Works |
+| RentCast + PDF + Excel | ✅ Works |
+| Email from EC2 (Gmail SMTP) | ❌ Failed — deferred (client decision: Gmail vs SES) |
+
+### 2.4 Stripe billing (test mode)
+
+| Item | Result |
+|------|--------|
+| Checkout session creation | ✅ Works |
+| Stripe CLI webhooks | ✅ Configured |
+| Subscription status auto-update | 🟡 Partial — manual SQL used for dev; webhooks need prod hardening |
+| Dev bypass for job creation | ✅ `BYPASS_SUBSCRIPTION_CHECK=true` in local `.env` |
 
 ---
 
-## 3. What the Automation Does
-
-### High-level flow
+## 3. Current Architecture (dev environment)
 
 ```
-Chrome tab (auction listing page)
-    → Read URL + page text + screenshot OCR
-    → User confirms addresses + financial inputs
-    → RentCast APIs (property, value, rent, market stats)
-    → API Ninjas mortgage rates
-    → Pandas calculations (cap rate, DSCR, BRRRR scores, etc.)
-    → PDF per property + Excel summary
-    → Google Street View image in PDF
-    → Email PDFs + Excel to recipient
+┌─────────────────┐     ngrok      ┌──────────────────┐     HTTPS      ┌─────────────────────┐
+│  Linux dev PC   │ ──────────────►│  ngrok tunnel    │◄───────────────│  Windows EC2        │
+│  PostgreSQL     │                │                  │                │  worker/runner.py   │
+│  FastAPI :8000  │                │                  │                │  headless automation│
+└─────────────────┘                └──────────────────┘                └─────────────────────┘
+        ▲                                                                         │
+        │ Postman / future UI                                                     ▼
+   Developer testing                                                    Temp: PDF + Excel
+                                                                        (S3 next)
 ```
 
-### Sample target URLs (from client)
-
-- https://www.ashlandauction.com/auctions/33350
-- https://www.ashlandauction.com/auctions/33872
-
-### User inputs (replacing tkinter popups in SaaS)
-
-**Window 1 — Addresses:** Auto-detected, user can edit/add/remove.
-
-**Window 2 — Financial inputs:**
-
-| Field | Default |
-|-------|---------|
-| Recipient Email | (empty) |
-| Interest Rate | 0.06 |
-| Loan Length (Years) | 30 |
-| Discount Percentage | 0.25 |
-| Closing Costs % | 0.04 |
-| Money Down % | 0.20 |
-| Operating Expenses % | 0.02 |
-| Additional Income | 0 |
-| Vacancy Allowance % | 0.05 |
-| Lender LTV Ratio | 0.75 |
-| Rehab Costs % | 0.25 |
-| Refi Loan Amount % | 0.50 |
-| Refi Closing Costs % | 0.04 |
-| Months Holding Property | 3 |
-
-### APIs integrated
-
-| API | Endpoints used | Status |
-|-----|----------------|--------|
-| RentCast | Property Records, Value Estimate, Rent Estimate, Market Statistics | Keys received |
-| API Ninjas | Mortgage Rate (`/v1/mortgagerate` in code) | Keys received |
-| Google Maps | Street View Static API | Keys received |
-| Gmail SMTP | `smtp.gmail.com:465` | Credentials in source — must move to Secrets Manager |
+**Important:** This is a **development** topology. Production will move API + DB to AWS and remove ngrok.
 
 ---
 
-## 4. Technology Stack (Agreed)
+## 4. Project Goals
 
-| Layer | Technology |
-|-------|------------|
-| Frontend dashboard | React / Next.js |
-| Backend API | Python FastAPI |
-| Database | PostgreSQL |
-| Cloud workers | AWS Windows EC2 |
-| File storage | AWS S3 |
-| Job queue | Redis + Celery |
-| Secrets | AWS Secrets Manager |
-| Payments | Stripe |
-| Email (production) | AWS SES recommended; Gmail SMTP as fallback |
-| Browser extension | Chrome Manifest V3 |
-| Analytics | Power BI embed + custom charts/tables |
-| OCR | Tesseract (on EC2 image) |
+| Goal | Description | Status |
+|------|-------------|--------|
+| Commercial SaaS | Sell subscriptions to multiple paying users | 🟡 Backend only |
+| Cloud execution | Run automation on AWS Windows EC2 | ✅ Proven |
+| Chrome extension | Users trigger jobs from browser (MV3) | ⬜ Phase 3 |
+| Web dashboard | Session history, charts, downloads | ⬜ Phase 3 |
+| Payments | Stripe subscriptions gate access | 🟡 Test mode works |
+| Security | API keys in Secrets Manager | ⬜ Still in `.env` |
 
 ---
 
@@ -112,20 +116,20 @@ Chrome tab (auction listing page)
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Receive Python source | ✅ Done | `address_capture_v1.58.py` (2,627 lines) |
-| Receive API keys & sample URLs | ✅ Done | Documented in `information` |
-| Receive tkinter field mapping | ✅ Done | Documented in `information` |
-| AWS console access | ✅ Done | IAM user created |
-| Stripe access | ✅ Done | Dev team logged in (2026-07-01) |
-| FastAPI backend + auth | ✅ Done | `backend/app/` — signup, login, JWT, jobs API |
-| PostgreSQL schema | ✅ Done | `db/schema.sql` |
-| Stripe integration | ✅ Done | Checkout + webhooks tested locally |
-| Worker job processing (poll + claim) | 🟡 In progress | Dry-run worker; EC2 automation hook next |
-| Script refactor (split at line 484) | ⬜ Not started | |
-| Secrets → AWS Secrets Manager | ⬜ Not started | |
-| EC2 spike (1 job on 1 Windows instance) | ✅ Done | PDF/Excel OK; email pending client |
+| Receive Python source | ✅ Done | `worker/legacy/address_capture_v1.58.py` |
+| Receive API keys & sample URLs | ✅ Done | `secrets/information` |
+| AWS console access | ✅ Done | IAM user: Abubakar_Mahmood |
+| Stripe access | ✅ Done | Test product ~$99/mo |
+| FastAPI backend + auth | ✅ Done | signup, login, JWT, `/auth/me` |
+| PostgreSQL schema | ✅ Done | `db/schema.sql` — users, jobs, subscriptions, job_files, output_rows, logs |
+| Stripe checkout + webhooks | ✅ Done | Local test mode |
+| Worker poll / claim / complete / fail | ✅ Done | Secured with `WORKER_API_KEY` |
+| End-to-end dry-run (Linux) | ✅ Done | Full API → worker → completed |
+| EC2 spike (GUI mode) | ✅ Done | PDF/Excel OK; email blocked |
+| Secrets → AWS Secrets Manager | ⬜ Not started | Keys still in `.env` |
+| Production subscription flow | 🟡 Partial | Bypass flag for dev testing |
 
-**Phase 1 deliverable:** Working backend with auth + payments, demonstrable via API. No dashboard UI yet.
+**Phase 1 verdict:** ✅ **Complete** (API demonstrable via Postman; no UI)
 
 ---
 
@@ -133,14 +137,20 @@ Chrome tab (auction listing page)
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Migrate script to Windows EC2 workers | 🟡 In progress | Spike done; worker runner scaffolded |
+| Headless worker (no tkinter) | ✅ Done | `worker/legacy/headless_main.py` |
+| Job inputs from API JSON | ✅ Done | All financial fields mapped |
+| Windows EC2 worker connected to API | ✅ Done | Via ngrok (dev) |
+| Real PDF + Excel on EC2 | ✅ Done | Baltimore address verified |
+| S3 bucket created | ✅ Done | `snapshot-reports-dev-cloud` (eu-north-1) |
+| S3 upload from worker | ⬜ Not started | IAM role setup in progress |
+| API download endpoint (presigned URL) | ⬜ Not started | After S3 upload |
+| Deploy API on AWS Linux EC2 | ⬜ Not started | Replace ngrok |
 | Redis + Celery job queue | ⬜ Not started | |
-| S3 storage for PDFs/Excel | ⬜ Not started | |
-| Replace tkinter with API parameters | ⬜ Not started | |
 | Job timeouts, retries, crash recovery | ⬜ Not started | |
-| Email via SES or Gmail | ⬜ Blocked | Awaiting client decision |
+| Email (SES or Gmail) | ⬜ Blocked | Awaiting client decision |
+| API keys → Secrets Manager | ⬜ Not started | |
 
-**Phase 2 deliverable:** Automation runs in AWS; jobs triggered via API produce same outputs as local exe.
+**Phase 2 verdict:** 🟡 **~40% complete** — automation proven; storage + production hosting next
 
 ---
 
@@ -152,197 +162,214 @@ Chrome tab (auction listing page)
 | React/Next.js dashboard | ⬜ Not started | |
 | Power BI embedding | ⬜ Blocked | Awaiting client license |
 | Admin panel | ⬜ Not started | |
-| Production deployment | ⬜ Not started | |
+| Production deployment + domain + SSL | ⬜ Not started | |
 | Branding | ⬜ Blocked | Logo, colors, name |
-| Chrome Web Store decision | ⬜ Blocked | Public vs private distribution |
+| Chrome Web Store decision | ⬜ Blocked | Public vs private |
 
-**Phase 3 deliverable:** Full live product — sign up, subscribe, extension, dashboard, admin.
-
----
-
-## 6. Assets Received from Client
-
-| Asset | File / Location | Date received |
-|-------|-----------------|---------------|
-| Build guide | `Dextersol_Developer_Build_Guide.docx` | 2026-06-11 |
-| Packaged executable | `Snapshot/Snapshot.exe` | 2026-06-11 |
-| Python source | `address_capture_v1.58.py` | 2026-06-29 |
-| API keys, URLs, input fields | `information` | 2026-06-29 |
-| AWS IAM credentials | `Abubakar_Mahmood_credentials.csv` | 2026-06-29 |
+**Phase 3 verdict:** ⬜ **Not started**
 
 ---
 
-## 7. Pending from Client
+## 6. What We Built (code inventory)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| FastAPI app | `backend/app/` | Auth, jobs, billing, worker endpoints |
+| DB schema | `db/schema.sql` | PostgreSQL tables |
+| Worker runner | `worker/runner.py` | Poll API, process jobs |
+| Worker API client | `worker/api_client.py` | Claim/complete/fail + ngrok header |
+| Headless automation | `worker/legacy/headless_main.py` | Runs legacy pipeline from JSON |
+| Automation runner | `worker/automation_runner.py` | Subprocess wrapper for EC2 |
+| Legacy script | `worker/legacy/address_capture_v1.58.py` | Original automation (patched for SaaS) |
+| PM report | `docs/pm/PROJECT_REPORT.md` | This document |
+
+### Key API endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Health check |
+| POST | `/auth/signup` | Register user |
+| POST | `/auth/login` | Get JWT |
+| GET | `/auth/me` | Current user |
+| POST | `/jobs` | Create job (subscription or dev bypass) |
+| GET | `/jobs` | List jobs |
+| GET | `/jobs/{id}` | Job status + details |
+| POST | `/billing/checkout-session` | Stripe checkout |
+| POST | `/billing/webhook` | Stripe events |
+| POST | `/worker/jobs/claim` | Worker claims next queued job |
+| POST | `/worker/jobs/{id}/complete` | Worker reports success |
+| POST | `/worker/jobs/{id}/fail` | Worker reports failure |
+
+---
+
+## 7. Bugs Fixed During Development
+
+| Issue | Fix |
+|-------|-----|
+| Worker 401 Unauthorized | Synced `WORKER_API_KEY`; restart API after `.env` change |
+| Postgres connection refused | `podman start snapshot-postgres` |
+| EC2 can't reach local API | ngrok tunnel + `API_BASE_URL` |
+| ngrok browser warning blocks API | `ngrok-skip-browser-warning` header |
+| `KeyError: 1` on single address | Removed debug lines in legacy script (`[1]` index) |
+| Zip_Response None crash | Patched legacy script (earlier EC2 spike) |
+| pandas dict `.loc` assignment | Patched to `.at[]` (earlier EC2 spike) |
+| Empty bar chart crash | Skip chart when no data (earlier EC2 spike) |
+| `num_months_holding` not saved in tkinter | ⬜ Not fixed (headless uses API JSON — OK for SaaS) |
+
+---
+
+## 8. Pending from Client
 
 | # | Item | Phase | Priority | Status |
 |---|------|-------|----------|--------|
-| 1 | Confirm where to start (Phase 1 kickoff approval) | 1 | 🔴 High | Awaiting reply |
-| 2 | Email setup decision — Gmail SMTP vs AWS SES | 2 | 🔴 High | Awaiting reply |
-| 3 | Stripe subscription plans (tiers, monthly/yearly pricing) | 1 | 🔴 High | Awaiting reply |
-| 4 | Confirm AWS IAM permissions (EC2, S3, Secrets Manager) | 1 | 🟡 Medium | Partial — verify scope |
-| 5 | Rotate API keys after Secrets Manager setup | 1 | 🟡 Medium | After migration |
-| 6 | Branding (logo, colors, platform name) | 3 | 🟢 Low | Not yet needed |
-| 7 | Power BI licensing | 3 | 🟢 Low | Not yet needed |
-| 8 | Chrome Web Store publishing decision | 3 | 🟢 Low | Not yet needed |
+| 1 | Email: Gmail SMTP vs AWS SES | 2 | 🔴 High | Awaiting reply |
+| 2 | Stripe plan confirmation (pricing tiers) | 1 | 🔴 High | Test $99/mo exists |
+| 3 | IAM: confirm EC2/S3/Secrets Manager scope | 2 | 🟡 Medium | S3 bucket created; role attach in progress |
+| 4 | API key rotation after Secrets Manager | 2 | 🟡 Medium | After migration |
+| 5 | Branding (logo, colors, name) | 3 | 🟢 Low | |
+| 6 | Power BI licensing | 3 | 🟢 Low | |
+| 7 | Chrome Web Store public vs private | 3 | 🟢 Low | |
 
 ---
 
-## 8. Team Access Status
+## 9. What's Left — Recommended Order
 
-| System | Access | Notes |
-|--------|--------|-------|
-| AWS Console | ✅ Yes | User: Abubakar_Mahmood |
-| Stripe Dashboard | ✅ Yes | Logged in 2026-07-01 |
-| RentCast API | ✅ Keys received | Move to Secrets Manager |
-| API Ninjas API | ✅ Keys received | Move to Secrets Manager |
-| Google Maps API | ✅ Keys received | Move to Secrets Manager |
-| Gmail SMTP | ⚠️ In source code | Must secure + rotate |
+### Immediate (this week)
+1. **Finish IAM role** on Windows EC2 → verify S3 upload test (`SUCCESS`)
+2. **Implement S3 upload** in worker + presigned download in API
+3. Set `SNAPSHOT_WORK_DIR=C:\snapshot\output` on EC2 for easier file inspection
 
----
+### Short term (next 2–3 weeks)
+4. **Deploy API + Postgres** on Linux EC2 (same VPC as Windows worker)
+5. Remove ngrok dependency
+6. Stripe webhook hardening — subscriptions auto-activate
+7. Migrate secrets to **AWS Secrets Manager**
 
-## 9. Technical Findings & Risks
-
-### Risks (from build guide + code review)
-
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| GUI automation on Windows EC2 | 🔴 High | EC2 spike in first week of Phase 1 |
-| Worker orchestration (freezes/crashes) | 🔴 High | Celery timeouts, retries, session isolation |
-| Chrome extension + Web Store review | 🟡 Medium | Start extension early in Phase 3 |
-| RentCast rate limits (20 req/sec) | 🟡 Medium | Queue throttling per job |
-| Secrets exposed in source files | 🔴 High | Migrate to Secrets Manager immediately in Phase 1 |
-
-### Code issues found (pre-migration)
-
-| Issue | Location | Action |
-|-------|----------|--------|
-| Monolithic 2,627-line script | `address_capture_v1.58.py` | Refactor into modules at line 484 split |
-| Hardcoded API keys + Gmail password | `.py` + `information` | Remove; use Secrets Manager |
-| Windows-only paths (Tesseract, pywinauto) | `.py` line 217+ | Configure on EC2 image |
-| `num_months_holding` not saved on submit | `.py` submit() | Fix during refactor |
-| API Ninjas v1 in code vs v2 in docs | `.py` line 934 | Test and align endpoint |
-| Excel attachment MIME type set as `pdf` | `.py` line 2615-2619 | Fix during refactor |
+### Medium term
+8. **Redis + Celery** — proper job queue, retries, timeouts
+9. **Email** — once client chooses Gmail vs SES
+10. Chrome extension + React dashboard (Phase 3)
 
 ---
 
-## 10. Recommended Start Order
+## 10. Technical Risks (updated)
 
-Once client confirms kickoff:
-
-```
-Week 1
-  ├── Set up repo + dev environment
-  ├── FastAPI skeleton + PostgreSQL schema
-  ├── Move secrets to AWS Secrets Manager
-  └── EC2 spike: 1 Windows instance, 1 end-to-end job
-
-Week 2–3
-  ├── Auth (signup, login, JWT, email verify)
-  ├── Stripe checkout + webhooks + subscription gating
-  └── Refactor address_capture into worker modules
-
-Week 4+
-  └── Phase 2: Celery queue, S3, production workers
-```
+| Risk | Severity | Status |
+|------|----------|--------|
+| GUI automation on Windows EC2 | 🔴 High | ✅ Mitigated — headless mode works |
+| Worker orchestration (crashes) | 🔴 High | 🟡 Basic poll only; Celery pending |
+| Secrets in source / `.env` | 🔴 High | ⬜ Not migrated yet |
+| ngrok URL changes on restart | 🟡 Medium | Dev only — replace with AWS deploy |
+| RentCast rate limits | 🟡 Medium | Not hit yet in testing |
+| Email from EC2 | 🟡 Medium | Blocked — needs SES or client Gmail approval |
+| IAM role attach on Windows EC2 | 🟡 Medium | In progress — metadata 404 = no role attached |
 
 ---
 
-## 11. Scope Guardrails (Do Not Creep)
+## 11. Cost Responsibilities (Client)
 
-- MVP caps concurrent workers — **not** 1,000 simultaneous jobs
-- Ongoing maintenance, high-concurrency scaling, Power BI licensing = separate paid items
-- New client requests outside agreed scope = change request
-
----
-
-## 12. Cost Responsibilities (Client Side)
-
-- AWS infrastructure (EC2, S3, Secrets Manager, data transfer)
-- Power BI licensing
+- AWS: EC2 Windows (worker), future Linux EC2 (API), S3, Secrets Manager, data transfer
 - Stripe transaction fees
-- Third-party API usage (RentCast, API Ninjas, Google Maps)
+- Third-party APIs: RentCast, API Ninjas, Google Maps
+- Power BI license (Phase 3)
+- Chrome Web Store fee if public listing (Phase 3)
 
 ---
 
-## 13. Update Log
+## 12. Update Log
 
-> Add a new entry at the **top** of this section after each project update.
+> Add new entries at the **top**.
 
-### 2026-07-01 — Onboarding progress
+### 2026-07-10 — Phase 2 milestone: EC2 headless automation end-to-end
 
-- **Done:** Stripe dashboard access obtained by dev team
-- **Done:** Deep code review of `address_capture_v1.58.py` completed
-- **Done:** Client delivered source, API keys, sample URLs, tkinter field mapping
-- **Done:** AWS console login received
-- **Done:** This project report created
-- **Blocked:** Awaiting client confirmation on email setup (Gmail vs SES)
-- **Blocked:** Awaiting Stripe subscription plan details
-- **Blocked:** Awaiting client approval to begin Phase 1 build
-- **Next:** Send client kickoff message; begin repo setup once approved
+- **Done:** Windows EC2 worker connects to API via ngrok
+- **Done:** Real job completed with `2202 Clifton Ave, Baltimore, MD 21216` — PDF + Excel verified
+- **Done:** Headless pipeline (`headless_main.py`) — no Chrome/tkinter on worker
+- **Done:** S3 bucket created: `snapshot-reports-dev-cloud` (eu-north-1)
+- **In progress:** IAM role `SnapshotWindowsWorkerRole` for EC2 → S3 (metadata 404 — role attach pending)
+- **Blocked:** S3 upload code not implemented yet
+- **Next:** Attach IAM role → S3 upload → API download endpoint → deploy API on AWS
 
-### 2026-07-08 — Worker integration started
+### 2026-07-09 — Worker integration + subscription bypass
 
-- **Done:** Worker API endpoints (`claim`, `complete`, `fail`)
-- **Done:** Worker runner (`worker/runner.py`) with dry-run mode for local testing
-- **Next:** Test full flow: create job → worker processes → job status `completed`
-- **Next:** Wire EC2 Windows automation into `worker/processor.py`
+- **Done:** Full dry-run flow: create job → worker → `completed`
+- **Done:** Dev subscription bypass (`BYPASS_SUBSCRIPTION_CHECK`)
+- **Done:** Worker env loading from `.env`; ngrok support
+- **Done:** Fixed debug line crash (`KeyError: 1`) for single-address jobs
+- **Failed then fixed:** Worker API key mismatch (API restart required after `.env` change)
 
-### 2026-07-04 — Backend foundation started
+### 2026-07-08 — Backend foundation
 
-- **Done:** EC2 spike successful (automation + PDF/Excel on cloud Windows)
-- **Done:** PostgreSQL schema created (`db/schema.sql`)
-- **Done:** FastAPI backend scaffold (auth, jobs, Stripe billing stubs)
-- **Skipped for now:** Email delivery (waiting on client Gmail vs SES decision)
-- **Next:** Run PostgreSQL locally, test API endpoints, configure Stripe price ID
+- **Done:** FastAPI auth, jobs, Stripe, worker endpoints
+- **Done:** PostgreSQL schema applied locally
+- **Done:** Worker scaffold with dry-run mode
 
-### 2026-07-02 — Phase 1 workspace + secrets baseline
+### 2026-07-04 — EC2 spike (GUI mode)
 
-- **Done:** Created Phase 1 repo folder structure (`backend/`, `db/`, `worker/`, `infra/`, `docs/`)
-- **Done:** Organized received artifacts into folders (`docs/`, `worker/legacy/`, `artifacts/`, `secrets/`)
-- **Done:** Added `.env.example` and secrets runbook (`infra/secrets.md`)
-- **Next:** Create AWS Secrets Manager secret `snapshot/prod/third_party` and move runtime to use it (no hardcoded keys)
+- **Done:** Automation runs on Windows Server 2022
+- **Done:** PDF + Excel generated on cloud
+- **Skipped:** Email from EC2 (Gmail SMTP refused)
 
-### 2026-06-29 — Client deliverables received
+### 2026-07-01 — Onboarding
 
-- Received Python source (`address_capture_v1.58.py`)
-- Received `information` file with API keys, sample URLs, input fields
-- Received AWS credentials CSV
+- Stripe access, code review, AWS credentials, project report created
 
-### 2026-06-11 — Project intake
+### 2026-06-29 — Client deliverables
 
-- Received `Dextersol_Developer_Build_Guide.docx`
-- Received `Snapshot.exe` (packaged executable)
-- Initial scope and phase plan documented
+- Python source, API keys, sample URLs, tkinter field mapping
 
 ---
 
-## 14. Open Questions for Client
+## 13. PM Message Template (copy/paste)
 
-1. **Where should we start?** — Confirm Phase 1 kickoff approval
-2. **Email:** Keep Gmail SMTP or switch to AWS SES for production?
-3. **Stripe plans:** What subscription tiers and pricing (monthly/yearly)?
-4. **AWS IAM:** Can you confirm our user has EC2, S3, and Secrets Manager permissions?
-5. **MVP worker cap:** How many concurrent automation jobs should MVP support?
+**Subject:** SnapShot SaaS — Phase 2 milestone: cloud automation verified
+
+Hi Hatem,
+
+**Completed since last update:**
+- Full API backend (auth, jobs, Stripe test mode, worker endpoints)
+- End-to-end test: API job → Windows EC2 worker → completed status
+- Real property report generated in the cloud (PDF + Excel) for Baltimore auction address
+- Matches desktop tool output — without manual Chrome/tkinter on the worker
+
+**Demonstrable today:** Postman → create job → worker processes → `status: completed`
+
+**In progress:**
+- S3 storage for report downloads (bucket created; IAM permissions being configured)
+- Production API hosting on AWS (currently dev laptop + temporary tunnel)
+
+**Blocked on client:**
+- Email delivery: Gmail SMTP vs AWS SES?
+- Final Stripe subscription pricing confirmation
+
+**Next 2–3 weeks:**
+- S3 uploads + download links
+- API deployed on AWS (remove dev tunnel)
+- Secrets Manager for API keys
+
+Happy to demo the end-to-end flow on a call.
+
+Best,  
+[Your name]
 
 ---
 
-## 15. Contacts & References
+## 14. Contacts & Key Files
 
-| Role | Name | Notes |
-|------|------|-------|
-| Client | Hatem | Product owner |
-| Dev agency | Dextersol | Build guide author |
-| Dev team | Abubakar Mahmood | AWS + Stripe access |
-
-**Key files in repo:**
+| Role | Name |
+|------|------|
+| Client | Hatem |
+| Dev agency | Dextersol |
+| Dev team | Abubakar Mahmood |
 
 | File | Purpose |
 |------|---------|
-| `Dextersol_Developer_Build_Guide.docx` | Full build specification |
-| `address_capture_v1.58.py` | Client automation source |
-| `information` | Client-provided API/URL/input details |
-| `PROJECT_REPORT.md` | This living status report |
+| `docs/pm/PROJECT_REPORT.md` | This report |
+| `docs/spec/Dextersol_Developer_Build_Guide.docx` | Build specification |
+| `worker/legacy/address_capture_v1.58.py` | Automation source |
+| `secrets/information` | Client API keys + field mapping |
+| `db/schema.sql` | Database schema |
 
 ---
 
-*End of report — update Section 13 (Update Log) and Section 5 (Phase status tables) after each milestone.*
+*End of report — update after each milestone.*

@@ -25,5 +25,11 @@ class Settings(BaseSettings):
     # Local dev only — set false in production
     bypass_subscription_check: bool = False
 
+    aws_region: str = "eu-north-1"
+    s3_bucket_name: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    s3_presign_expire_seconds: int = 3600
+
 
 settings = Settings()

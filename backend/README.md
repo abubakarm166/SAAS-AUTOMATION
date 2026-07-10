@@ -30,6 +30,8 @@ API docs: http://localhost:8000/docs
 - `POST /jobs` (requires active subscription)
 - `GET /jobs`
 - `GET /jobs/{job_id}`
+- `GET /jobs/{job_id}/files`
+- `GET /jobs/{job_id}/files/{file_id}/download` (presigned S3 URL)
 - `POST /billing/checkout-session`
 - `POST /billing/webhook`
 - `POST /worker/jobs/claim` (worker key)

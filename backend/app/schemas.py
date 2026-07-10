@@ -65,6 +65,22 @@ class JobOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class JobFileOut(BaseModel):
+    id: UUID
+    file_type: str
+    filename: str
+    s3_key: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FileDownloadOut(BaseModel):
+    url: str
+    expires_in: int
+    filename: str
+
+
 class SubscriptionOut(BaseModel):
     status: str
     plan_id: str | None

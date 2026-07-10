@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_active_subscription
 from app.database import get_db
-from app.models import Job, JobStatus, User
-from app.schemas import JobCreate, JobOut
+from app.models import Job, JobFile, JobStatus, User
+from app.schemas import FileDownloadOut, JobCreate, JobFileOut, JobOut
+from app.storage import create_presigned_download_url, s3_configured
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -44,3 +45,36 @@ def get_job(job_id: UUID, user: User = Depends(get_current_user), db: Session = 
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     return job
+
+
+@router.get("/{job_id}/files", response_model=list[JobFileOut])
+def list_job_files(job_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == user.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    return db.query(JobFile).filter(JobFile.job_id == job.id).order_by(JobFile.created_at.asc()).all()
+
+
+@router.get("/{job_id}/files/{file_id}/download", response_model=FileDownloadOut)
+def download_job_file(
+    job_id: UUID,
+    file_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job_file = (
+        db.query(JobFile)
+        .filter(JobFile.id == file_id, JobFile.job_id == job_id, JobFile.user_id == user.id)
+        .first()
+    )
+    if not job_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if not job_file.s3_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not available in storage")
+    if not s3_configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="S3 is not configured")
+
+    from app.config import settings
+
+    url = create_presigned_download_url(job_file.s3_key, job_file.filename)
+    return FileDownloadOut(url=url, expires_in=settings.s3_presign_expire_seconds, filename=job_file.filename)
