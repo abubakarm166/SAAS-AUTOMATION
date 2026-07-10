@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_active_subscription
+from app.config import settings
 from app.database import get_db
 from app.models import Job, JobFile, JobStatus, User
 from app.schemas import FileDownloadOut, JobCreate, JobFileOut, JobOut
@@ -73,8 +74,11 @@ def download_job_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not available in storage")
     if not s3_configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="S3 is not configured")
-
-    from app.config import settings
+    if not settings.aws_access_key_id or not settings.aws_secret_access_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AWS credentials not configured for download URLs",
+        )
 
     url = create_presigned_download_url(job_file.s3_key, job_file.filename)
     return FileDownloadOut(url=url, expires_in=settings.s3_presign_expire_seconds, filename=job_file.filename)
