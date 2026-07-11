@@ -41,7 +41,10 @@ def run_automation(job: dict[str, Any]) -> tuple[list[dict], list[dict]]:
         raise ValueError("Job inputs.addresses must contain at least one address")
 
     recipient = inputs.get("recipient_email")
-    if recipient:
+    skip_email = os.getenv("SNAPSHOT_SKIP_EMAIL", "").lower() == "true"
+    if skip_email:
+        pass
+    elif recipient:
         os.environ["SNAPSHOT_SKIP_EMAIL"] = "false"
     else:
         os.environ.setdefault("SNAPSHOT_SKIP_EMAIL", "true")

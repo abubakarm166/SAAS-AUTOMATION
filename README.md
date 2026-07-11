@@ -2,6 +2,9 @@
 
 This repository will become the full multi-user SaaS wrapper around the existing SnapShot automation.
 
+### Setup guide
+- **[Step-by-step setup guide](docs/SETUP_GUIDE.md)** — local dev, Windows EC2 worker, S3, production Linux EC2
+
 ### What we have today
 - `worker/legacy/address_capture_v1.58.py`: current working local automation (Windows GUI + APIs + PDF/Excel + email)
 - `docs/spec/Dextersol_Developer_Build_Guide.docx`: build specification
@@ -15,6 +18,7 @@ This repository will become the full multi-user SaaS wrapper around the existing
 
 ### Directory layout
 - `backend/`: FastAPI service (auth, billing, jobs API)
+- `frontend/`: Next.js dashboard (Phase 3)
 - `db/`: database schema/migrations
 - `worker/`: worker/automation code (Celery tasks later)
 - `infra/`: AWS notes/scripts (EC2, S3, Secrets Manager, SES, etc.)

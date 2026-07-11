@@ -6,6 +6,7 @@ information
 *.env
 backend/.env
 .env.*
+frontend/.env.local
 *.pem
 *.p12
 *.key
