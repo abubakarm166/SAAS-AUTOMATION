@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     stripe_price_id: str = ""
 
     frontend_url: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     worker_api_key: str = "change-me-worker-key"
     api_base_url: str = "http://localhost:8000"

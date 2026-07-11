@@ -11,6 +11,13 @@ pip install -r requirements.txt
 
 Copy env vars from repo root `.env.example` into `backend/.env` (or repo root `.env`).
 
+CORS for the Next.js dashboard (in `backend/.env`):
+
+```env
+FRONTEND_URL=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
 Apply database schema first: see `db/README.md`.
 
 ### Run
@@ -19,8 +26,6 @@ Apply database schema first: see `db/README.md`.
 cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-API docs: http://localhost:8000/docs
 
 ### Phase 1 endpoints
 - `GET /health`
