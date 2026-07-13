@@ -1,0 +1,10 @@
+[Unit]
+Description=Run SnapShot stale job recovery every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=snapshot-recover-stale.service
+
+[Install]
+WantedBy=timers.target

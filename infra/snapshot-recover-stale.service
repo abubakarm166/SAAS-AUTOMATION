@@ -1,0 +1,11 @@
+[Unit]
+Description=SnapShot Celery stale-job recovery (calls API every 5 minutes)
+After=network.target snapshot-api.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/home/ubuntu/automation/backend/.env
+ExecStart=/bin/sh -c 'curl -sf -X POST http://127.0.0.1:8000/worker/jobs/recover-stale -H "X-Worker-API-Key: ${WORKER_API_KEY}"'
+
+[Install]
+WantedBy=multi-user.target

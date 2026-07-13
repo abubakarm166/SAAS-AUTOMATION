@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     worker_api_key: str = "change-me-worker-key"
     api_base_url: str = "http://localhost:8000"
 
+    # Redis + Celery job queue (set CELERY_ENABLED=true on API + Windows worker)
+    celery_broker_url: str = ""
+    celery_task_queue: str = "snapshot_jobs"
+    celery_enabled: bool = False
+    celery_stale_job_seconds: int = 3900
+
     # Local dev only — set false in production
     bypass_subscription_check: bool = False
 

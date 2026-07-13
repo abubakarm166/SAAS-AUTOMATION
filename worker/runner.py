@@ -1,8 +1,7 @@
-import os
 import time
 
 from worker.api_client import WorkerApiClient, load_worker_env, poll_interval_seconds
-from worker.processor import process_job
+from worker.job_runner import execute_claimed_job, fail_claimed_job
 
 
 def run_once(client: WorkerApiClient) -> bool:
@@ -19,16 +18,10 @@ def run_once(client: WorkerApiClient) -> bool:
     print(f"Processing job {job_id} ...")
 
     try:
-        output_rows, files = process_job(job)
-        from worker.s3_storage import s3_enabled, upload_job_files
-
-        if s3_enabled():
-            files = upload_job_files(job, files)
-            print(f"Uploaded {len(files)} file(s) to S3 for job {job_id}")
-        result = client.complete_job(job_id, output_rows=output_rows, files=files)
+        result = execute_claimed_job(client, job)
         print(f"Job {job_id} completed with status={result.get('status')}")
     except Exception as exc:
-        client.fail_job(job_id, str(exc))
+        fail_claimed_job(client, job_id, str(exc))
         print(f"Job {job_id} failed: {exc}")
 
     return True
@@ -39,7 +32,8 @@ def main() -> None:
     client = WorkerApiClient()
     interval = poll_interval_seconds()
     key_hint = f"...{client.api_key[-8:]}" if len(client.api_key) >= 8 else "(short)"
-    print(f"Worker started. API={client.base_url} key={key_hint} poll={interval}s")
+    print(f"Poll worker started. API={client.base_url} key={key_hint} poll={interval}s")
+    print("Tip: set CELERY_BROKER_URL and run Celery worker instead for production.")
 
     while True:
         processed = run_once(client)

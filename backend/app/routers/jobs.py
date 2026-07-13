@@ -1,5 +1,7 @@
 from uuid import UUID
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -7,10 +9,12 @@ from app.auth import get_current_user, require_active_subscription
 from app.config import settings
 from app.database import get_db
 from app.models import Job, JobFile, JobStatus, User
+from app.queue import enqueue_snapshot_job
 from app.schemas import FileDownloadOut, JobCreate, JobFileOut, JobOut
 from app.storage import create_presigned_download_url, s3_configured
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=JobOut, status_code=status.HTTP_201_CREATED)
@@ -31,6 +35,14 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    if settings.celery_enabled:
+        try:
+            enqueue_snapshot_job(str(job.id))
+        except Exception as exc:
+            # Job stays queued — poll worker can still pick it up as fallback.
+            logger.warning("Failed to enqueue job %s: %s", job.id, exc)
+
     return job
 
 

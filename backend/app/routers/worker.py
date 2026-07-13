@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -38,6 +38,67 @@ def claim_next_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.post("/jobs/{job_id}/accept", response_model=WorkerJobOut)
+def accept_job(
+    job_id: UUID,
+    _: None = Depends(verify_worker_key),
+    db: Session = Depends(get_db),
+):
+    """Claim a specific job by ID (used by Celery workers)."""
+    job = db.query(Job).filter(Job.id == job_id).with_for_update().first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.status != JobStatus.queued:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Job is not queued")
+
+    job.status = JobStatus.running
+    job.started_at = datetime.now(timezone.utc)
+    db.add(Log(user_id=job.user_id, job_id=job.id, level="info", message="Job accepted by Celery worker"))
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/jobs/recover-stale")
+def recover_stale_jobs(
+    _: None = Depends(verify_worker_key),
+    db: Session = Depends(get_db),
+):
+    """Requeue jobs stuck in running longer than celery_stale_job_seconds."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.celery_stale_job_seconds)
+    stale_jobs = (
+        db.query(Job)
+        .filter(Job.status == JobStatus.running, Job.started_at.isnot(None), Job.started_at < cutoff)
+        .all()
+    )
+    recovered = []
+    for job in stale_jobs:
+        job.status = JobStatus.queued
+        job.started_at = None
+        db.add(
+            Log(
+                user_id=job.user_id,
+                job_id=job.id,
+                level="warning",
+                message="Job requeued after worker timeout",
+            )
+        )
+        recovered.append(str(job.id))
+
+    if recovered:
+        db.commit()
+        if settings.celery_enabled:
+            from app.queue import enqueue_snapshot_job
+
+            for job_id in recovered:
+                try:
+                    enqueue_snapshot_job(job_id)
+                except Exception:
+                    pass
+
+    return {"recovered": recovered, "count": len(recovered)}
 
 
 @router.post("/jobs/{job_id}/complete", response_model=WorkerJobOut)

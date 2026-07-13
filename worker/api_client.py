@@ -47,6 +47,15 @@ class WorkerApiClient:
         data = response.json()
         return data if data else None
 
+    def accept_job(self, job_id: str) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/worker/jobs/{job_id}/accept",
+            headers=self._headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def complete_job(self, job_id: str, output_rows: list[dict], files: list[dict] | None = None) -> dict[str, Any]:
         payload = {"output_rows": output_rows, "files": files or []}
         response = requests.post(
