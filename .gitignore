@@ -2,10 +2,8 @@
 information
 *credentials*
 *.csv
-.env
 *.env
 backend/.env
-.env.*
 frontend/.env.local
 *.pem
 *.p12
@@ -42,3 +40,5 @@ full_screenshot_pyautogui_.png
 Snapshot.zip
 Snapshot/
 
+config.bat
+node_modules

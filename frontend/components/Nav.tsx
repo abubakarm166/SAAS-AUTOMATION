@@ -40,9 +40,8 @@ export function Nav() {
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-8">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <Logo size={34} />
-            <span className="text-lg font-bold tracking-tight text-slate-900">SnapShot</span>
+          <Link href="/dashboard" className="flex items-center">
+            <Logo size={48} />
           </Link>
           <nav className="hidden items-center gap-1 sm:flex">
             {links.map((l) => {
