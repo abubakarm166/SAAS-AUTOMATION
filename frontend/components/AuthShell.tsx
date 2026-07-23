@@ -15,10 +15,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-6 9 6v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-              </svg>
+            <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-white/15 p-1.5 backdrop-blur">
+              <Logo size={36} />
             </span>
             <span className="text-xl font-bold tracking-tight">SnapShot</span>
           </div>

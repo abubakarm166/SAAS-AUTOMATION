@@ -55,8 +55,10 @@ SNAPSHOT_SKIP_EMAIL=true
 ```powershell
 cd C:\snapshot
 pip install -r worker\requirements.txt
-celery -A worker.celery_app worker -Q snapshot_jobs -c 1 --loglevel=info
+python -m celery -A worker.celery_app worker -Q snapshot_jobs --pool=solo --loglevel=info
 ```
+
+**Windows must use `--pool=solo`** — the default prefork pool hangs on task execution.
 
 **Stale job recovery** (Linux EC2 — optional timer):
 

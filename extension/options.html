@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SnapShot — Settings</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body { width: auto; max-width: 520px; margin: 24px auto; }
+      .panel { background: white; border: 1px solid #e2e8f0; border-radius: 12px; }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <img class="brand-mark" src="icons/icon48.png" alt="SnapShot" width="32" height="32" />
+        <div>
+          <h1>SnapShot settings</h1>
+          <p id="user-label">Extension configuration</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <label class="label" for="api-url">API base URL</label>
+      <input id="api-url" class="input" type="url" placeholder="http://16.170.241.9/api" />
+
+      <label class="label" for="dashboard-url">Dashboard URL</label>
+      <input id="dashboard-url" class="input" type="url" placeholder="http://16.170.241.9" />
+
+      <label class="label" for="email">Account email</label>
+      <input id="email" class="input" type="email" autocomplete="username" />
+
+      <label class="label" for="password">Password</label>
+      <input id="password" class="input" type="password" autocomplete="current-password" />
+
+      <div class="actions">
+        <button id="save-btn" class="btn btn-primary" type="button">Save settings</button>
+        <button id="login-btn" class="btn btn-ghost" type="button">Sign in</button>
+        <button id="logout-btn" class="btn btn-ghost" type="button">Sign out</button>
+      </div>
+      <p id="message" class="message hidden"></p>
+    </section>
+
+    <script src="lib/storage.js"></script>
+    <script src="lib/api.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

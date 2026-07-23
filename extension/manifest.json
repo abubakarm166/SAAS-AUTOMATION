@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "SnapShot",
+  "version": "0.1.0",
+  "description": "Capture property addresses from the current page and submit SnapShot automation jobs.",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SnapShot — submit job"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["lib/address.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

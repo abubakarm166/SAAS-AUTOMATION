@@ -18,14 +18,15 @@ This repository will become the full multi-user SaaS wrapper around the existing
 
 ### Directory layout
 - `backend/`: FastAPI service (auth, billing, jobs API)
-- `frontend/`: Next.js dashboard (Phase 3)
+- `frontend/`: Next.js dashboard
+- `extension/`: Chrome extension (MV3) — capture page URL + addresses, submit jobs
 - `db/`: database schema/migrations
-- `worker/`: worker/automation code (Celery tasks later)
-- `infra/`: AWS notes/scripts (EC2, S3, Secrets Manager, SES, etc.)
+- `worker/`: Celery worker + automation code
+- `infra/`: AWS notes/scripts (EC2, S3, Redis, nginx, etc.)
 - `docs/`: project docs (spec + PM updates)
 - `secrets/`: sensitive items **(never commit)**
 
 ### Notes
-- Phase 3 (Chrome extension + Next.js dashboard) is intentionally not started during Phase 1.
+- Dashboard, Celery queue, and Chrome extension are implemented — see `extension/README.md` for install steps.
 - Do not commit any API keys, SMTP passwords, AWS credentials, or tokens.
 

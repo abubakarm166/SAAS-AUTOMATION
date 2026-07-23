@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SnapShot</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <img class="brand-mark" src="icons/icon48.png" alt="SnapShot" width="32" height="32" />
+        <div>
+          <h1>SnapShot</h1>
+          <p id="user-label">Not signed in</p>
+        </div>
+      </div>
+      <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </header>
+
+    <section id="login-panel" class="panel hidden">
+      <p class="hint">Sign in with your SnapShot account to submit jobs.</p>
+      <label class="label" for="login-email">Email</label>
+      <input id="login-email" class="input" type="email" autocomplete="username" />
+      <label class="label" for="login-password">Password</label>
+      <input id="login-password" class="input" type="password" autocomplete="current-password" />
+      <button id="login-btn" class="btn btn-primary">Sign in</button>
+    </section>
+
+    <section id="job-panel" class="panel hidden">
+      <label class="label" for="source-url">Source URL</label>
+      <input id="source-url" class="input" type="url" readonly />
+
+      <div class="row-between">
+        <label class="label" for="address-0">Addresses</label>
+        <button id="scan-btn" class="btn btn-ghost btn-sm" type="button">Scan page</button>
+      </div>
+      <div id="address-list" class="address-list"></div>
+      <button id="add-address-btn" class="btn btn-ghost btn-sm" type="button">+ Add address</button>
+
+      <label class="label" for="recipient-email">Recipient email (optional)</label>
+      <input id="recipient-email" class="input" type="email" placeholder="reports@example.com" />
+
+      <button id="submit-btn" class="btn btn-primary">Create job</button>
+    </section>
+
+    <section id="status-panel" class="panel hidden">
+      <p id="status-title" class="status-title">Job submitted</p>
+      <p id="status-detail" class="status-detail"></p>
+      <div class="actions">
+        <a id="dashboard-link" class="btn btn-primary" href="#" target="_blank" rel="noopener">Open in dashboard</a>
+        <button id="new-job-btn" class="btn btn-ghost" type="button">New job</button>
+      </div>
+    </section>
+
+    <p id="message" class="message hidden"></p>
+
+    <script src="lib/storage.js"></script>
+    <script src="lib/defaults.js"></script>
+    <script src="lib/api.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
