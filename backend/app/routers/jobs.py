@@ -46,6 +46,37 @@ def create_job(
     return job
 
 
+@router.post("/{job_id}/retry", response_model=JobOut, status_code=status.HTTP_201_CREATED)
+def retry_job(
+    job_id: UUID,
+    user: User = Depends(require_active_subscription),
+    db: Session = Depends(get_db),
+):
+    original = db.query(Job).filter(Job.id == job_id, Job.user_id == user.id).first()
+    if not original:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if original.status != JobStatus.failed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be retried")
+
+    job = Job(
+        user_id=user.id,
+        status=JobStatus.queued,
+        source_url=original.source_url,
+        inputs=original.inputs or {},
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    if settings.celery_enabled:
+        try:
+            enqueue_snapshot_job(str(job.id))
+        except Exception as exc:
+            logger.warning("Failed to enqueue retry job %s: %s", job.id, exc)
+
+    return job
+
+
 @router.get("", response_model=list[JobOut])
 def list_jobs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     jobs = db.query(Job).filter(Job.user_id == user.id).order_by(Job.created_at.desc()).all()

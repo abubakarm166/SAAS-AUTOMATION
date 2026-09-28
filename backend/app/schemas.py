@@ -29,6 +29,26 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=20)
+    password: str = Field(min_length=8)
+
+
+class MessageOut(BaseModel):
+    message: str
+
+
+class BillingConfigOut(BaseModel):
+    stripe_configured: bool
+    price_configured: bool
+    webhook_configured: bool
+    bypass_subscription_check: bool
+
+
 class JobInputs(BaseModel):
     recipient_email: EmailStr | None = None
     addresses: list[str] = Field(default_factory=list)

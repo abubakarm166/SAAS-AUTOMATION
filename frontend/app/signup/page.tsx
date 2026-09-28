@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 
 import { AuthShell } from "@/components/AuthShell";
 import { api } from "@/lib/api";
+import { setToken } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -20,7 +21,9 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await api.signup(email, password);
-      router.push("/login?registered=1");
+      const { access_token } = await api.login(email, password);
+      setToken(access_token);
+      router.push("/dashboard?welcome=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {

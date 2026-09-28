@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Password-reset / transactional email (same mailbox as report SMTP is fine)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 465
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    password_reset_expire_minutes: int = 60
+
     worker_api_key: str = "change-me-worker-key"
     api_base_url: str = "http://localhost:8000"
 

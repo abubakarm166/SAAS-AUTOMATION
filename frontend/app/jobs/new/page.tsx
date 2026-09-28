@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { api, ApiError } from "@/lib/api";
@@ -11,6 +11,8 @@ import { DEFAULT_JOB_INPUTS, type JobInputs } from "@/lib/types";
 function NewJobContent() {
   const router = useRouter();
   const [sourceUrl, setSourceUrl] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [addresses, setAddresses] = useState<string[]>([""]);
   const [inputs, setInputs] = useState<Omit<JobInputs, "addresses" | "recipient_email">>({
@@ -31,6 +33,16 @@ function NewJobContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  useEffect(() => {
+    api
+      .me()
+      .then((user) => {
+        setAccountEmail(user.email);
+        setRecipientEmail((prev) => prev || user.email);
+      })
+      .catch(() => undefined);
+  }, []);
 
   function updateAddress(i: number, value: string) {
     setAddresses((prev) => prev.map((a, idx) => (idx === i ? value : a)));
@@ -54,11 +66,19 @@ function NewJobContent() {
       setError("At least one address is required");
       return;
     }
+    if (sendEmail && !recipientEmail.trim()) {
+      setError("Enter a recipient email, or turn off email delivery.");
+      return;
+    }
     setLoading(true);
     try {
       const job = await api.createJob({
         source_url: sourceUrl.trim() || undefined,
-        inputs: { ...inputs, addresses: cleaned, recipient_email: recipientEmail.trim() || null },
+        inputs: {
+          ...inputs,
+          addresses: cleaned,
+          recipient_email: sendEmail ? recipientEmail.trim() : null,
+        },
       });
       router.push(`/jobs/${job.id}`);
     } catch (err) {
@@ -118,15 +138,39 @@ function NewJobContent() {
             />
           </div>
 
-          <div>
-            <label className="label">Recipient email (optional)</label>
-            <input
-              type="email"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-              placeholder="reports@example.com"
-              className="input"
-            />
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={sendEmail}
+                onChange={(e) => {
+                  setSendEmail(e.target.checked);
+                  if (e.target.checked && !recipientEmail && accountEmail) {
+                    setRecipientEmail(accountEmail);
+                  }
+                }}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-slate-800">Email me the PDF + Excel</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Reports are always available to download. Email is sent when the job completes.
+                </span>
+              </span>
+            </label>
+            {sendEmail && (
+              <div className="mt-3">
+                <label className="label">Recipient email</label>
+                <input
+                  type="email"
+                  required={sendEmail}
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder={accountEmail || "you@example.com"}
+                  className="input bg-white"
+                />
+              </div>
+            )}
           </div>
 
           <div>

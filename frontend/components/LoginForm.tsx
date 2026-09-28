@@ -12,6 +12,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
+  const resetDone = searchParams.get("reset") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -43,6 +44,11 @@ export function LoginForm() {
             Account created. Please sign in.
           </div>
         )}
+        {resetDone && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+            Password updated. Please sign in.
+          </div>
+        )}
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
             {error}
@@ -61,7 +67,12 @@ export function LoginForm() {
           />
         </div>
         <div>
-          <label htmlFor="password" className="label">Password</label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="label">Password</label>
+            <Link href="/forgot-password" className="text-xs font-medium text-brand-600 hover:text-brand-700">
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"

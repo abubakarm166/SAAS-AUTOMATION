@@ -18,7 +18,16 @@ psql postgresql://postgres:postgres@localhost:5432/snapshot -f db/schema.sql
 
 ### Tables
 - `users`, `subscriptions` — auth + Stripe billing
+- `password_reset_tokens` — forgot-password flow
 - `jobs` — automation runs (status + inputs JSON)
 - `output_rows` — cumulative per-user dataframe rows
-- `job_files` — PDF/Excel metadata (S3 keys in Phase 2)
+- `job_files` — PDF/Excel metadata (S3 keys)
 - `logs` — job/user logs
+
+### Migrations (existing DBs)
+
+If the database was created before password reset:
+
+```bash
+psql "$DATABASE_URL" -f db/migrations/001_password_reset_tokens.sql
+```

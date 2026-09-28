@@ -2571,52 +2571,57 @@ listings_em=listings_em[["formattedAddress", "medianDaysOnMarket_rent", "totalLi
 listings_em.to_excel('Listings Report Data.xlsx')
 
 if user_em and os.getenv("SNAPSHOT_SKIP_EMAIL", "false").lower() != "true":
-    email_sender = os.getenv("SMTP_USERNAME", "hatemdj09@gmail.com")
-    password = os.getenv("SMTP_PASSWORD", "qkxc rptb wfrm tjdu")
-    email_receiver = user_em
-    subject = 'SnapShot Property Report'
-    body = 'See the attached reports for your recently analyzed properties.'
+    # Email must never fail the whole job — reports are already written above.
+    try:
+        email_sender = os.getenv("SMTP_USERNAME", "").strip()
+        # Gmail app passwords are often pasted with spaces; strip them for login.
+        password = os.getenv("SMTP_PASSWORD", "").replace(" ", "").strip()
+        if not email_sender or not password:
+            raise RuntimeError("SMTP_USERNAME / SMTP_PASSWORD not set")
 
-    em = EmailMessage()
-    em['From'] = email_sender
-    em['To'] = user_em
-    em['Subject'] = subject
-    em.set_content(body)
+        subject = 'SnapShot Property Report'
+        body = 'See the attached reports for your recently analyzed properties.'
 
-    #Add pdfs
-    for i in range(len(listings)):
+        em = EmailMessage()
+        em['From'] = email_sender
+        em['To'] = user_em
+        em['Subject'] = subject
+        em.set_content(body)
 
-        if listings["formattedAddress"][i] is not None:
-            pdf_path = f'{listings["formattedAddress"][i]} Property Report.pdf'
-        else:
-            pdf_path = f'{listings["Address"][i]} Property Report.pdf'
-        
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
+        for i in range(len(listings)):
+            if listings["formattedAddress"][i] is not None:
+                pdf_path = f'{listings["formattedAddress"][i]} Property Report.pdf'
+            else:
+                pdf_path = f'{listings["Address"][i]} Property Report.pdf'
+
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+
+            em.add_attachment(
+                pdf_bytes,
+                maintype='application',
+                subtype='pdf',
+                filename=pdf_path
+            )
+
+        xlsx_path = 'Listings Report Data.xlsx'
+        with open(xlsx_path, 'rb') as f:
+            xlsx_bytes = f.read()
+
         em.add_attachment(
-            pdf_bytes,
+            xlsx_bytes,
             maintype='application',
-            subtype='pdf',
-            filename=pdf_path
+            subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename='Listings Report Data.xlsx'
         )
 
-    pdf_path = 'Listings Report Data.xlsx'
-
-    with open(pdf_path, 'rb') as f:
-        pdf_bytes = f.read()
-        
-    em.add_attachment(
-        pdf_bytes,
-        maintype='application',
-        subtype='pdf',
-        filename='Listings Report Data.xlsx'
-    )
-
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as smtp:
-        smtp.login(email_sender, password)
-        smtp.send_message(em)
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "465"))
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as smtp:
+            smtp.login(email_sender, password)
+            smtp.send_message(em)
+        print(f"Email sent to {user_em}")
+    except Exception as email_err:
+        print(f"WARNING: email send failed (job will still complete): {email_err}")
 

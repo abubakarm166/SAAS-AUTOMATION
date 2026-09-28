@@ -1,13 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AuthGuard } from "@/components/AuthGuard";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
+
+const STATUS_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "completed", label: "Completed" },
+  { id: "failed", label: "Failed" },
+] as const;
+
+const DISMISS_KEY = "snapshot_onboarding_dismissed";
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
@@ -18,16 +28,36 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   );
 }
 
+function primaryAddress(job: Job): string {
+  const addrs = job.inputs?.addresses;
+  if (Array.isArray(addrs) && addrs.length > 0) {
+    const first = String(addrs[0]);
+    const more = addrs.length > 1 ? ` +${addrs.length - 1}` : "";
+    return first + more;
+  }
+  return "—";
+}
+
 function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const welcome = searchParams.get("welcome") === "1";
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]["id"]>("all");
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await api.listJobs();
+      const [data, sub] = await Promise.all([
+        api.listJobs(),
+        api.getSubscription().catch(() => null),
+      ]);
       setJobs(data);
+      setSubscribed(sub?.status === "active" || sub?.status === "trialing");
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
@@ -41,9 +71,14 @@ function DashboardContent() {
   }, [load]);
 
   useEffect(() => {
+    const dismissed = typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === "1";
+    setShowOnboarding(!dismissed);
+  }, []);
+
+  useEffect(() => {
     const hasActive = jobs.some((j) => j.status === "queued" || j.status === "running");
     if (!hasActive) return;
-    const id = setInterval(load, 5000);
+    const id = setInterval(load, 4000);
     return () => clearInterval(id);
   }, [jobs, load]);
 
@@ -56,14 +91,29 @@ function DashboardContent() {
     };
   }, [jobs]);
 
-  function primaryAddress(job: Job): string {
-    const addrs = job.inputs?.addresses;
-    if (Array.isArray(addrs) && addrs.length > 0) {
-      const first = String(addrs[0]);
-      const more = addrs.length > 1 ? ` +${addrs.length - 1}` : "";
-      return first + more;
-    }
-    return "—";
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return jobs.filter((job) => {
+      if (statusFilter === "active" && job.status !== "queued" && job.status !== "running") return false;
+      if (statusFilter === "completed" && job.status !== "completed") return false;
+      if (statusFilter === "failed" && job.status !== "failed") return false;
+      if (!q) return true;
+      const hay = [
+        primaryAddress(job),
+        job.status,
+        job.source_url ?? "",
+        job.id,
+        ...(Array.isArray(job.inputs?.addresses) ? job.inputs.addresses.map(String) : []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [jobs, query, statusFilter]);
+
+  function dismissOnboarding() {
+    localStorage.setItem(DISMISS_KEY, "1");
+    setShowOnboarding(false);
   }
 
   return (
@@ -80,6 +130,15 @@ function DashboardContent() {
           New job
         </Link>
       </div>
+
+      {showOnboarding && (
+        <OnboardingChecklist
+          subscribed={subscribed}
+          hasJob={jobs.length > 0}
+          welcome={welcome}
+          onDismiss={dismissOnboarding}
+        />
+      )}
 
       {!loading && jobs.length > 0 && (
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -112,52 +171,86 @@ function DashboardContent() {
           </span>
           <h3 className="mt-4 text-lg font-semibold text-slate-900">No jobs yet</h3>
           <p className="mt-1 max-w-sm text-sm text-slate-500">
-            Create your first job to run property automation in the cloud.
+            {subscribed
+              ? "Create your first job to run property automation in the cloud."
+              : "Subscribe first, then create a job to generate PDF and Excel reports."}
           </p>
-          <Link href="/jobs/new" className="btn btn-primary mt-6">
-            Create your first job
+          <Link href={subscribed ? "/jobs/new" : "/billing"} className="btn btn-primary mt-6">
+            {subscribed ? "Create your first job" : "Go to billing"}
           </Link>
         </div>
       ) : (
-        <div className="card mt-6 overflow-hidden">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead>
-              <tr className="bg-slate-50/80">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Address</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell">Created</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {jobs.map((job) => (
-                <tr
-                  key={job.id}
-                  onClick={() => router.push(`/jobs/${job.id}`)}
-                  className="cursor-pointer transition-colors hover:bg-slate-50"
+        <>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by address…"
+              className="input sm:max-w-xs"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatusFilter(f.id)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                    statusFilter === f.id
+                      ? "bg-brand-600 text-white"
+                      : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                  }`}
                 >
-                  <td className="max-w-xs truncate px-5 py-4 font-medium text-slate-800">
-                    {primaryAddress(job)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={job.status} />
-                  </td>
-                  <td className="hidden px-5 py-4 text-slate-500 sm:table-cell">
-                    {new Date(job.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-600">
-                      View
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </span>
-                  </td>
-                </tr>
+                  {f.label}
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+
+          <div className="card mt-4 overflow-hidden">
+            {filtered.length === 0 ? (
+              <p className="px-5 py-10 text-center text-sm text-slate-500">No jobs match that search.</p>
+            ) : (
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Address</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                    <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell">Created</th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((job) => (
+                    <tr
+                      key={job.id}
+                      onClick={() => router.push(`/jobs/${job.id}`)}
+                      className="cursor-pointer transition-colors hover:bg-slate-50"
+                    >
+                      <td className="max-w-xs truncate px-5 py-4 font-medium text-slate-800">
+                        {primaryAddress(job)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={job.status} />
+                      </td>
+                      <td className="hidden px-5 py-4 text-slate-500 sm:table-cell">
+                        {new Date(job.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-600">
+                          View
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -166,7 +259,15 @@ function DashboardContent() {
 export default function DashboardPage() {
   return (
     <AuthGuard>
-      <DashboardContent />
+      <Suspense
+        fallback={
+          <div className="flex min-h-[40vh] items-center justify-center">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
+          </div>
+        }
+      >
+        <DashboardContent />
+      </Suspense>
     </AuthGuard>
   );
 }

@@ -27,7 +27,8 @@ export function Nav() {
     api.me().then(setUser).catch(() => clearToken());
   }, [authed, pathname]);
 
-  if (!authed || pathname === "/login" || pathname === "/signup") return null;
+  const publicPaths = ["/", "/login", "/signup", "/forgot-password", "/reset-password"];
+  if (!authed || publicPaths.includes(pathname)) return null;
 
   function logout() {
     clearToken();

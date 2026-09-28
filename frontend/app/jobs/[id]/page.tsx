@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -25,14 +25,29 @@ function FileIcon({ type }: { type: string }) {
   );
 }
 
+function formatElapsed(fromIso: string, now: number): string {
+  const start = new Date(fromIso).getTime();
+  const secs = Math.max(0, Math.floor((now - start) / 1000));
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}m ${s}s`;
+}
+
 function JobDetailContent() {
   const params = useParams();
+  const router = useRouter();
   const jobId = params.id as string;
+  const filesRef = useRef<HTMLDivElement | null>(null);
+  const prevStatus = useRef<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [files, setFiles] = useState<JobFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [justCompleted, setJustCompleted] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     try {
@@ -56,9 +71,27 @@ function JobDetailContent() {
 
   useEffect(() => {
     if (!job || (job.status !== "queued" && job.status !== "running")) return;
-    const id = setInterval(load, 5000);
+    const id = setInterval(load, 2000);
     return () => clearInterval(id);
   }, [job, load]);
+
+  useEffect(() => {
+    if (!job || (job.status !== "queued" && job.status !== "running")) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [job]);
+
+  useEffect(() => {
+    if (!job) return;
+    const previous = prevStatus.current;
+    if (previous && previous !== "completed" && job.status === "completed") {
+      setJustCompleted(true);
+      window.setTimeout(() => {
+        filesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+    prevStatus.current = job.status;
+  }, [job]);
 
   async function handleDownload(fileId: string) {
     setDownloading(fileId);
@@ -69,6 +102,18 @@ function JobDetailContent() {
       setError(err instanceof Error ? err.message : "Download failed");
     } finally {
       setDownloading(null);
+    }
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    setError("");
+    try {
+      const next = await api.retryJob(jobId);
+      router.push(`/jobs/${next.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
+      setRetrying(false);
     }
   }
 
@@ -92,6 +137,8 @@ function JobDetailContent() {
   }
 
   const addresses = Array.isArray(job.inputs?.addresses) ? job.inputs.addresses : [];
+  const inProgress = job.status === "queued" || job.status === "running";
+  const waitLabel = job.status === "queued" ? "Waiting for a worker" : "Generating PDF and Excel";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -116,10 +163,36 @@ function JobDetailContent() {
         </div>
       )}
 
-      {(job.status === "queued" || job.status === "running") && (
-        <div className="mt-6 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-          Automation in progress — this page refreshes automatically.
+      {inProgress && (
+        <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-blue-800">
+          <div className="flex items-center gap-3">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+            <div>
+              <p className="text-sm font-semibold">{waitLabel}</p>
+              <p className="mt-0.5 text-sm text-blue-700">
+                Most jobs finish in about 10–40 seconds. This page updates automatically.
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs font-medium text-blue-600">
+            Elapsed {formatElapsed(job.started_at || job.created_at, now)}
+          </p>
+        </div>
+      )}
+
+      {justCompleted && (
+        <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Report is ready — download the files below
+          {job.inputs?.recipient_email ? ", and check email if you requested delivery." : "."}
+        </div>
+      )}
+
+      {job.status === "failed" && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+          <p className="text-sm text-red-800">This job failed. You can retry with the same addresses and inputs.</p>
+          <button type="button" onClick={handleRetry} disabled={retrying} className="btn btn-primary">
+            {retrying ? "Retrying…" : "Retry job"}
+          </button>
         </div>
       )}
 
@@ -153,6 +226,13 @@ function JobDetailContent() {
           </div>
         )}
 
+        {job.inputs?.recipient_email && (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Email delivery</h2>
+            <p className="mt-1 text-sm text-slate-700">{String(job.inputs.recipient_email)}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-sm">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Created</span>
@@ -173,14 +253,14 @@ function JobDetailContent() {
         )}
       </div>
 
-      <div className="mt-8">
+      <div ref={filesRef} id="job-files" className="mt-8">
         <h2 className="text-lg font-semibold text-slate-900">Files</h2>
         {files.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
-            {job.status === "completed" ? "No files recorded." : "Files appear when the job completes."}
+            {job.status === "completed" ? "No files recorded." : "Downloads appear here when the job completes."}
           </p>
         ) : (
-          <ul className="mt-4 space-y-2.5">
+          <ul className={`mt-4 space-y-2.5 ${justCompleted ? "rounded-2xl ring-2 ring-emerald-400 ring-offset-2" : ""}`}>
             {files.map((file) => (
               <li key={file.id} className="card flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">

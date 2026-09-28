@@ -1,9 +1,12 @@
 import { clearToken, getToken } from "./auth";
 import type {
+  BillingConfig,
   CheckoutSession,
   FileDownload,
   Job,
   JobFile,
+  MessageResponse,
+  PortalSession,
   Subscription,
   TokenResponse,
   User,
@@ -70,6 +73,18 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }, false),
 
+  forgotPassword: (email: string) =>
+    request<MessageResponse>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }, false),
+
+  resetPassword: (token: string, password: string) =>
+    request<MessageResponse>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }, false),
+
   me: () => request<User>("/auth/me"),
 
   listJobs: () => request<Job[]>("/jobs"),
@@ -79,13 +94,24 @@ export const api = {
   createJob: (payload: { source_url?: string; inputs: Record<string, unknown> }) =>
     request<Job>("/jobs", { method: "POST", body: JSON.stringify(payload) }),
 
+  retryJob: (jobId: string) =>
+    request<Job>(`/jobs/${jobId}/retry`, { method: "POST" }),
+
   listJobFiles: (jobId: string) => request<JobFile[]>(`/jobs/${jobId}/files`),
 
   getDownloadUrl: (jobId: string, fileId: string) =>
     request<FileDownload>(`/jobs/${jobId}/files/${fileId}/download`),
 
+  getBillingConfig: () => request<BillingConfig>("/billing/config", {}, false),
+
   getSubscription: () => request<Subscription>("/billing/subscription"),
 
   createCheckoutSession: () =>
     request<CheckoutSession>("/billing/checkout-session", { method: "POST" }),
+
+  createPortalSession: () =>
+    request<PortalSession>("/billing/portal-session", { method: "POST" }),
+
+  syncSubscription: () =>
+    request<Subscription>("/billing/sync", { method: "POST" }),
 };

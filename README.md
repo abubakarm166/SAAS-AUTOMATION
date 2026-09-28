@@ -1,32 +1,26 @@
-## SnapShot SaaS (Dextersol / Hatem) — Phase 1 Workspace
+## SnapShot SaaS (Dextersol / Hatem)
 
-This repository will become the full multi-user SaaS wrapper around the existing SnapShot automation.
+Multi-user cloud platform wrapping the SnapShot property-report automation.
 
-### Setup guide
-- **[Step-by-step setup guide](docs/SETUP_GUIDE.md)** — local dev, Windows EC2 worker, S3, production Linux EC2
+**Status: Completed** — dashboard, Chrome extension, cloud worker, S3 downloads, Stripe billing, and email delivery are live.
 
-### What we have today
-- `worker/legacy/address_capture_v1.58.py`: current working local automation (Windows GUI + APIs + PDF/Excel + email)
-- `docs/spec/Dextersol_Developer_Build_Guide.docx`: build specification
-- `docs/pm/PROJECT_REPORT.md`: living status report for PM updates
-- `artifacts/`: packaged executable + zip
+### Client documents (send these)
+- **[Delivery Document](docs/SnapShot_Delivery_Guide.md)** — formal handover, deliverables, acceptance checklist  
+- **[User Guide](docs/SnapShot_User_Guide.md)** — how to use the dashboard, extension, downloads, and email  
 
-### Phase 1 goal (Foundation)
-- Set up backend foundation: **FastAPI + PostgreSQL + Auth + Stripe**
-- Establish security baseline: **no secrets in code**, use AWS Secrets Manager
-- Run the **Windows EC2 spike** early: one automation job on one cloud Windows desktop session
+### Developer / ops
+- **[Setup guide](docs/SETUP_GUIDE.md)** — local dev, Windows EC2 worker, S3, Linux API  
+- Component READMEs: `backend/`, `frontend/`, `extension/`, `worker/`, `db/`
 
 ### Directory layout
-- `backend/`: FastAPI service (auth, billing, jobs API)
-- `frontend/`: Next.js dashboard
-- `extension/`: Chrome extension (MV3) — capture page URL + addresses, submit jobs
-- `db/`: database schema/migrations
-- `worker/`: Celery worker + automation code
-- `infra/`: AWS notes/scripts (EC2, S3, Redis, nginx, etc.)
-- `docs/`: project docs (spec + PM updates)
-- `secrets/`: sensitive items **(never commit)**
+- `backend/` — FastAPI (auth, billing, jobs, worker API)
+- `frontend/` — Next.js dashboard
+- `extension/` — Chrome MV3 extension
+- `worker/` — Celery worker + legacy automation
+- `db/` — PostgreSQL schema
+- `infra/` — nginx, systemd, Redis notes
+- `docs/` — delivery, user guide, setup, PM notes
+- `secrets/` — never commit real credentials
 
 ### Notes
-- Dashboard, Celery queue, and Chrome extension are implemented — see `extension/README.md` for install steps.
-- Do not commit any API keys, SMTP passwords, AWS credentials, or tokens.
-
+- Do not commit API keys, SMTP passwords, AWS credentials, or tokens.

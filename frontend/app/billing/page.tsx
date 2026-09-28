@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { api } from "@/lib/api";
-import type { Subscription } from "@/lib/types";
+import type { BillingConfig, Subscription } from "@/lib/types";
 
 const planFeatures = [
   "Unlimited property report jobs",
@@ -16,15 +16,21 @@ const planFeatures = [
 
 function BillingContent() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [config, setConfig] = useState<BillingConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
-    api
-      .getSubscription()
-      .then(setSubscription)
-      .catch(() => setSubscription(null))
+    Promise.all([
+      api.getSubscription().catch(() => null),
+      api.getBillingConfig().catch(() => null),
+    ])
+      .then(([sub, cfg]) => {
+        setSubscription(sub);
+        setConfig(cfg);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,7 +46,20 @@ function BillingContent() {
     }
   }
 
+  async function handleManage() {
+    setError("");
+    setPortalLoading(true);
+    try {
+      const { portal_url } = await api.createPortalSession();
+      window.location.href = portal_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open billing portal");
+      setPortalLoading(false);
+    }
+  }
+
   const isActive = subscription?.status === "active" || subscription?.status === "trialing";
+  const stripeReady = Boolean(config?.stripe_configured && config?.price_configured);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -50,6 +69,12 @@ function BillingContent() {
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {!loading && config && !stripeReady && !config.bypass_subscription_check && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          Payments are not fully configured yet. Please contact support.
         </div>
       )}
 
@@ -87,7 +112,7 @@ function BillingContent() {
 
             {subscription?.current_period_end && (
               <div className="mt-6 flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 text-sm">
-                <span className="text-slate-500">Renews</span>
+                <span className="text-slate-500">{isActive ? "Renews" : "Period end"}</span>
                 <span className="font-medium text-slate-800">
                   {new Date(subscription.current_period_end).toLocaleDateString()}
                 </span>
@@ -95,18 +120,28 @@ function BillingContent() {
             )}
 
             {isActive ? (
-              <div className="mt-6 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <path d="m9 11 3 3L22 4" />
-                </svg>
-                Your subscription is active. Create jobs anytime.
+              <div className="mt-6 space-y-3">
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <path d="m9 11 3 3L22 4" />
+                  </svg>
+                  Your subscription is active. Create jobs anytime.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManage}
+                  disabled={portalLoading}
+                  className="btn btn-ghost w-full"
+                >
+                  {portalLoading ? "Opening…" : "Manage billing (cancel / payment method)"}
+                </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={handleSubscribe}
-                disabled={checkoutLoading}
+                disabled={checkoutLoading || (!stripeReady && !config?.bypass_subscription_check)}
                 className="btn btn-primary mt-6 w-full"
               >
                 {checkoutLoading ? "Redirecting…" : "Subscribe now"}

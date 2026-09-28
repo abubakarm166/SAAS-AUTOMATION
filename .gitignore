@@ -29,7 +29,6 @@ venv/
 # OS / editor
 .DS_Store
 .idea/
-.vscode/
 
 # Generated outputs from current script
 *.pdf

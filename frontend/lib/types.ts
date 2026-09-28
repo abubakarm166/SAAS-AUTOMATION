@@ -64,6 +64,21 @@ export interface CheckoutSession {
   checkout_url: string;
 }
 
+export interface PortalSession {
+  portal_url: string;
+}
+
+export interface BillingConfig {
+  stripe_configured: boolean;
+  price_configured: boolean;
+  webhook_configured: boolean;
+  bypass_subscription_check: boolean;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
 export const DEFAULT_JOB_INPUTS: JobInputs = {
   addresses: [""],
   interest_rate: 0.06,
