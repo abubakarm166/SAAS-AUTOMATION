@@ -106,8 +106,11 @@ export const api = {
 
   getSubscription: () => request<Subscription>("/billing/subscription"),
 
-  createCheckoutSession: () =>
-    request<CheckoutSession>("/billing/checkout-session", { method: "POST" }),
+  createCheckoutSession: (plan: "monthly" | "yearly" = "monthly") =>
+    request<CheckoutSession>("/billing/checkout-session", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    }),
 
   createPortalSession: () =>
     request<PortalSession>("/billing/portal-session", { method: "POST" }),

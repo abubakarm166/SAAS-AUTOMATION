@@ -19,7 +19,7 @@ function BillingContent() {
   const [config, setConfig] = useState<BillingConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<"monthly" | "yearly" | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
@@ -34,15 +34,15 @@ function BillingContent() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSubscribe() {
+  async function handleSubscribe(plan: "monthly" | "yearly") {
     setError("");
-    setCheckoutLoading(true);
+    setCheckoutLoading(plan);
     try {
-      const { checkout_url } = await api.createCheckoutSession();
+      const { checkout_url } = await api.createCheckoutSession(plan);
       window.location.href = checkout_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start checkout");
-      setCheckoutLoading(false);
+      setCheckoutLoading(null);
     }
   }
 
@@ -138,14 +138,24 @@ function BillingContent() {
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleSubscribe}
-                disabled={checkoutLoading || (!stripeReady && !config?.bypass_subscription_check)}
-                className="btn btn-primary mt-6 w-full"
-              >
-                {checkoutLoading ? "Redirecting…" : "Subscribe now"}
-              </button>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => handleSubscribe("monthly")}
+                  disabled={Boolean(checkoutLoading) || !config?.monthly_enabled}
+                  className="btn btn-primary w-full"
+                >
+                  {checkoutLoading === "monthly" ? "Redirecting…" : "Monthly — $99"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSubscribe("yearly")}
+                  disabled={Boolean(checkoutLoading) || !config?.yearly_enabled}
+                  className="btn btn-ghost w-full"
+                >
+                  {checkoutLoading === "yearly" ? "Redirecting…" : "Yearly — $999"}
+                </button>
+              </div>
             )}
           </div>
         </div>

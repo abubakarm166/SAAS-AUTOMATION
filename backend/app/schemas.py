@@ -47,6 +47,12 @@ class BillingConfigOut(BaseModel):
     price_configured: bool
     webhook_configured: bool
     bypass_subscription_check: bool
+    monthly_enabled: bool = False
+    yearly_enabled: bool = False
+
+
+class CheckoutRequest(BaseModel):
+    plan: str = Field(default="monthly")
 
 
 class JobInputs(BaseModel):

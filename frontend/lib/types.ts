@@ -73,6 +73,8 @@ export interface BillingConfig {
   price_configured: boolean;
   webhook_configured: boolean;
   bypass_subscription_check: boolean;
+  monthly_enabled?: boolean;
+  yearly_enabled?: boolean;
 }
 
 export interface MessageResponse {

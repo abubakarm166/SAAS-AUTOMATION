@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_id: str = ""
+    stripe_price_id_monthly: str = ""
+    stripe_price_id_yearly: str = ""
 
     frontend_url: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

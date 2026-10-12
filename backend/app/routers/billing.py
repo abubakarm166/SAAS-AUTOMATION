@@ -9,7 +9,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import Subscription, SubscriptionStatus, User
-from app.schemas import BillingConfigOut, SubscriptionOut
+from app.schemas import BillingConfigOut, CheckoutRequest, SubscriptionOut
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -61,6 +61,33 @@ def _sync_stripe_subscription(db: Session, stripe_sub) -> Subscription | None:
     return sub
 
 
+def _monthly_price_id() -> str:
+    return (settings.stripe_price_id_monthly or settings.stripe_price_id or "").strip()
+
+
+def _yearly_price_id() -> str:
+    return (settings.stripe_price_id_yearly or "").strip()
+
+
+def _price_for_plan(plan: str) -> str:
+    key = (plan or "monthly").strip().lower()
+    if key in {"yearly", "year", "annual"}:
+        price_id = _yearly_price_id()
+        if not price_id:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Yearly price is not configured (set STRIPE_PRICE_ID_YEARLY)",
+            )
+        return price_id
+    price_id = _monthly_price_id()
+    if not price_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Monthly price is not configured (set STRIPE_PRICE_ID or STRIPE_PRICE_ID_MONTHLY)",
+        )
+    return price_id
+
+
 def _get_or_create_subscription_row(db: Session, user: User) -> Subscription:
     subscription = user.subscription
     if not subscription:
@@ -76,9 +103,11 @@ def billing_config():
     """Public-ish status for the dashboard (auth not required so login pages can hint)."""
     return BillingConfigOut(
         stripe_configured=bool(settings.stripe_secret_key),
-        price_configured=bool(settings.stripe_price_id),
+        price_configured=bool(_monthly_price_id() or _yearly_price_id()),
         webhook_configured=bool(settings.stripe_webhook_secret),
         bypass_subscription_check=settings.bypass_subscription_check,
+        monthly_enabled=bool(_monthly_price_id()),
+        yearly_enabled=bool(_yearly_price_id()),
     )
 
 
@@ -89,13 +118,14 @@ def get_subscription(user: User = Depends(get_current_user), db: Session = Depen
 
 
 @router.post("/checkout-session")
-def create_checkout_session(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_checkout_session(
+    payload: CheckoutRequest = CheckoutRequest(),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     _ensure_stripe()
-    if not settings.stripe_price_id:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Stripe price is not configured (set STRIPE_PRICE_ID)",
-        )
+    plan = payload.plan
+    price_id = _price_for_plan(plan)
 
     subscription = _get_or_create_subscription_row(db, user)
 
@@ -110,11 +140,11 @@ def create_checkout_session(user: User = Depends(get_current_user), db: Session 
     session = stripe.checkout.Session.create(
         mode="subscription",
         customer=subscription.stripe_customer_id,
-        line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
+        line_items=[{"price": price_id, "quantity": 1}],
         success_url=f"{settings.frontend_url.rstrip('/')}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{settings.frontend_url.rstrip('/')}/billing/cancel",
         client_reference_id=str(user.id),
-        metadata={"user_id": str(user.id)},
+        metadata={"user_id": str(user.id), "plan": plan},
         allow_promotion_codes=True,
     )
     return {"checkout_url": session.url}
@@ -192,7 +222,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             sub.stripe_subscription_id = subscription_id or sub.stripe_subscription_id
             if obj.get("payment_status") == "paid" or obj.get("status") == "complete":
                 sub.status = SubscriptionStatus.active
-            sub.plan_id = settings.stripe_price_id or sub.plan_id
+            sub.plan_id = _monthly_price_id() or sub.plan_id
             db.commit()
 
             if subscription_id:
