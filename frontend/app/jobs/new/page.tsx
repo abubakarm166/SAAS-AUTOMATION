@@ -31,7 +31,9 @@ function NewJobContent() {
     num_months_holding: DEFAULT_JOB_INPUTS.num_months_holding,
   });
   const [error, setError] = useState("");
+  const [captureNote, setCaptureNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
@@ -56,6 +58,40 @@ function NewJobContent() {
   }
   function setNum<K extends keyof typeof inputs>(key: K, value: string) {
     setInputs((prev) => ({ ...prev, [key]: parseFloat(value) || 0 }));
+  }
+
+  async function handleCapture() {
+    setError("");
+    setCaptureNote("");
+    const url = sourceUrl.trim();
+    if (!url) {
+      setError("Paste a listing URL first, then capture addresses.");
+      return;
+    }
+    setCapturing(true);
+    try {
+      const result = await api.extractAddresses(url);
+      if (result.url && result.url !== url) {
+        setSourceUrl(result.url);
+      }
+      if (result.addresses.length) {
+        setAddresses(result.addresses);
+        setCaptureNote(
+          `Found ${result.count} address${result.count === 1 ? "" : "es"} from the page. Review them, then create the job.`,
+        );
+      } else {
+        setAddresses([""]);
+        setCaptureNote("No addresses were found on that page. Add them manually below, or try another URL.");
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        router.push("/billing");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to capture addresses");
+    } finally {
+      setCapturing(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -117,7 +153,9 @@ function NewJobContent() {
         Back to jobs
       </Link>
       <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">New job</h1>
-      <p className="mt-1 text-sm text-slate-500">Submit addresses for cloud automation</p>
+      <p className="mt-1 text-sm text-slate-500">
+        Paste a listing URL to capture addresses automatically, review them, then run the report.
+      </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
         {error && (
@@ -129,13 +167,35 @@ function NewJobContent() {
         <div className="card space-y-5 p-6">
           <div>
             <label className="label">Auction / source URL</label>
-            <input
-              type="url"
-              value={sourceUrl}
-              onChange={(e) => setSourceUrl(e.target.value)}
-              placeholder="https://www.example-auction.com/..."
-              className="input"
-            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => {
+                  setSourceUrl(e.target.value);
+                  setCaptureNote("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleCapture();
+                  }
+                }}
+                placeholder="https://www.example-auction.com/..."
+                className="input flex-1"
+              />
+              <button
+                type="button"
+                onClick={handleCapture}
+                disabled={capturing || loading}
+                className="btn btn-primary sm:w-auto"
+              >
+                {capturing ? "Capturing…" : "Capture addresses"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              SnapShot reads the page the same way as the original script, then lets you review the list.
+            </p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
@@ -174,7 +234,10 @@ function NewJobContent() {
           </div>
 
           <div>
-            <label className="label">Addresses</label>
+            <label className="label">Addresses to review</label>
+            {captureNote && (
+              <p className="mb-2 text-sm text-slate-600">{captureNote}</p>
+            )}
             <div className="space-y-2">
               {addresses.map((addr, i) => (
                 <div key={i} className="flex gap-2">

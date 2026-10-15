@@ -54,6 +54,12 @@ export interface FileDownload {
   filename: string;
 }
 
+export interface ExtractedAddresses {
+  url: string;
+  addresses: string[];
+  count: number;
+}
+
 export interface Subscription {
   status: string;
   plan_id: string | null;

@@ -73,6 +73,16 @@ class JobInputs(BaseModel):
     num_months_holding: int = 3
 
 
+class ExtractAddressesRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+
+
+class ExtractAddressesOut(BaseModel):
+    url: str
+    addresses: list[str]
+    count: int
+
+
 class JobCreate(BaseModel):
     source_url: str | None = None
     inputs: JobInputs

@@ -117,29 +117,24 @@ def get_subscription(user: User = Depends(get_current_user), db: Session = Depen
     return subscription
 
 
-@router.post("/checkout-session")
-def create_checkout_session(
-    payload: CheckoutRequest = CheckoutRequest(),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    _ensure_stripe()
-    plan = payload.plan
-    price_id = _price_for_plan(plan)
+def _ensure_stripe_customer(db: Session, user: User, subscription: Subscription) -> str:
+    if subscription.stripe_customer_id:
+        try:
+            stripe.Customer.retrieve(subscription.stripe_customer_id)
+            return subscription.stripe_customer_id
+        except stripe.InvalidRequestError:
+            subscription.stripe_customer_id = None
 
-    subscription = _get_or_create_subscription_row(db, user)
+    customer = stripe.Customer.create(email=user.email, metadata={"user_id": str(user.id)})
+    subscription.stripe_customer_id = customer.id
+    db.commit()
+    return customer.id
 
-    if subscription.status in {SubscriptionStatus.active, SubscriptionStatus.trialing}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You already have an active subscription")
 
-    if not subscription.stripe_customer_id:
-        customer = stripe.Customer.create(email=user.email, metadata={"user_id": str(user.id)})
-        subscription.stripe_customer_id = customer.id
-        db.commit()
-
-    session = stripe.checkout.Session.create(
+def _create_checkout_session(user: User, customer_id: str, price_id: str, plan: str):
+    return stripe.checkout.Session.create(
         mode="subscription",
-        customer=subscription.stripe_customer_id,
+        customer=customer_id,
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=f"{settings.frontend_url.rstrip('/')}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{settings.frontend_url.rstrip('/')}/billing/cancel",
@@ -147,6 +142,32 @@ def create_checkout_session(
         metadata={"user_id": str(user.id), "plan": plan},
         allow_promotion_codes=True,
     )
+
+
+@router.post("/checkout-session")
+def create_checkout_session(
+    payload: CheckoutRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_stripe()
+    plan = payload.plan or "monthly"
+    price_id = _price_for_plan(plan)
+
+    subscription = _get_or_create_subscription_row(db, user)
+
+    if subscription.status in {SubscriptionStatus.active, SubscriptionStatus.trialing}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You already have an active subscription")
+
+    try:
+        customer_id = _ensure_stripe_customer(db, user, subscription)
+        session = _create_checkout_session(user, customer_id, price_id, plan)
+    except stripe.StripeError as exc:
+        detail = getattr(exc, "user_message", None) or str(exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+
+    if not session.url:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stripe did not return a checkout URL")
     return {"checkout_url": session.url}
 
 

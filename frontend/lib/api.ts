@@ -2,6 +2,7 @@ import { clearToken, getToken } from "./auth";
 import type {
   BillingConfig,
   CheckoutSession,
+  ExtractedAddresses,
   FileDownload,
   Job,
   JobFile,
@@ -93,6 +94,12 @@ export const api = {
 
   createJob: (payload: { source_url?: string; inputs: Record<string, unknown> }) =>
     request<Job>("/jobs", { method: "POST", body: JSON.stringify(payload) }),
+
+  extractAddresses: (url: string) =>
+    request<ExtractedAddresses>("/jobs/extract-addresses", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
 
   retryJob: (jobId: string) =>
     request<Job>(`/jobs/${jobId}/retry`, { method: "POST" }),

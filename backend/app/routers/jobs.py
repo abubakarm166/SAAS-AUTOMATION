@@ -10,11 +10,23 @@ from app.config import settings
 from app.database import get_db
 from app.models import Job, JobFile, JobStatus, User
 from app.queue import enqueue_snapshot_job
-from app.schemas import FileDownloadOut, JobCreate, JobFileOut, JobOut
+from app.address_capture import AddressCaptureError, capture_addresses_from_url
+from app.schemas import ExtractAddressesOut, ExtractAddressesRequest, FileDownloadOut, JobCreate, JobFileOut, JobOut
 from app.storage import create_presigned_download_url, s3_configured
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 logger = logging.getLogger(__name__)
+
+
+@router.post("/extract-addresses", response_model=ExtractAddressesOut)
+def extract_addresses(
+    payload: ExtractAddressesRequest,
+    _user: User = Depends(require_active_subscription),
+):
+    try:
+        return capture_addresses_from_url(payload.url)
+    except AddressCaptureError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("", response_model=JobOut, status_code=status.HTTP_201_CREATED)

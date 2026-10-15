@@ -39,7 +39,10 @@ function BillingContent() {
     setCheckoutLoading(plan);
     try {
       const { checkout_url } = await api.createCheckoutSession(plan);
-      window.location.href = checkout_url;
+      if (!checkout_url) {
+        throw new Error("Stripe did not return a checkout URL");
+      }
+      window.location.assign(checkout_url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start checkout");
       setCheckoutLoading(null);
