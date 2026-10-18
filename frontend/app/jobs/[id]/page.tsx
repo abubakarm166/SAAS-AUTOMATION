@@ -183,7 +183,9 @@ function JobDetailContent() {
       {justCompleted && (
         <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
           Report is ready — download the files below
-          {job.inputs?.recipient_email ? ", and check email if you requested delivery." : "."}
+          {job.inputs?.recipient_email
+            ? ", and check email if you requested delivery. If it is not in your inbox, please check your spam or junk folder."
+            : "."}
         </div>
       )}
 
