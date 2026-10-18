@@ -6,13 +6,15 @@ import { FormEvent, useState } from "react";
 
 import { AuthShell } from "@/components/AuthShell";
 import { api } from "@/lib/api";
-import { setToken } from "@/lib/auth";
+import { safeNextPath, setToken } from "@/lib/auth";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
   const resetDone = searchParams.get("reset") === "1";
+  const expired = searchParams.get("expired") === "1";
+  const nextPath = safeNextPath(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,7 +27,7 @@ export function LoginForm() {
     try {
       const { access_token } = await api.login(email, password);
       setToken(access_token);
-      router.push("/dashboard");
+      router.push(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -47,6 +49,11 @@ export function LoginForm() {
         {resetDone && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
             Password updated. Please sign in.
+          </div>
+        )}
+        {expired && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+            Your session expired. Please sign in again.
           </div>
         )}
         {error && (

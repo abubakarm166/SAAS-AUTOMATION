@@ -24,7 +24,7 @@ export function Nav() {
 
   useEffect(() => {
     if (!authed) return;
-    api.me().then(setUser).catch(() => clearToken());
+    api.me().then(setUser).catch(() => undefined);
   }, [authed, pathname]);
 
   const publicPaths = ["/", "/login", "/signup", "/forgot-password", "/reset-password"];

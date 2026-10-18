@@ -1,4 +1,14 @@
 import { clearToken, getToken } from "./auth";
+
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/forgot-password") || path.startsWith("/reset-password")) {
+    return;
+  }
+  const next = encodeURIComponent(`${path}${window.location.search}`);
+  window.location.replace(`/login?expired=1&next=${next}`);
+}
 import type {
   BillingConfig,
   CheckoutSession,
@@ -53,7 +63,10 @@ async function request<T>(
     } catch {
       /* ignore */
     }
-    if (res.status === 401) clearToken();
+    if (res.status === 401) {
+      clearToken();
+      redirectToLogin();
+    }
     throw new ApiError(String(detail), res.status);
   }
 
