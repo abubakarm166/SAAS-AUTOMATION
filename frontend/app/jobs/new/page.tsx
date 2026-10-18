@@ -214,7 +214,7 @@ function NewJobContent() {
               <span>
                 <span className="block text-sm font-semibold text-slate-800">Email me the PDF + Excel</span>
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  Reports are always available to download. Email is sent when the job completes.
+                  Reports are always available to download. Email is sent when the job completes. If you do not see it in your inbox, please check your spam or junk folder.
                 </span>
               </span>
             </label>
