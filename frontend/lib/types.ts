@@ -118,9 +118,13 @@ export interface AdminUser {
   email: string;
   is_active: boolean;
   is_admin: boolean;
+  is_bootstrap_admin?: boolean;
   created_at: string;
   job_count: number;
   subscription_status: string | null;
+  plan_id?: string | null;
+  plan_label?: string | null;
+  current_period_end?: string | null;
 }
 
 export interface AdminJob extends Job {

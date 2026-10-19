@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import SubscriptionStatus, User
 
 security = HTTPBearer()
@@ -44,6 +44,7 @@ def get_current_user(
     user = db.get(User, UUID(user_id))
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _sync_bootstrap_admin(user, db)
     return user
 
 
@@ -61,8 +62,36 @@ def admin_email_set() -> set[str]:
     return {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
 
 
-def is_admin_user(user: User) -> bool:
+def is_bootstrap_admin(user: User) -> bool:
     return user.email.lower() in admin_email_set()
+
+
+def is_admin_user(user: User) -> bool:
+    return bool(getattr(user, "is_admin", False)) or is_bootstrap_admin(user)
+
+
+def _sync_bootstrap_admin(user: User, db: Session) -> None:
+    if user.is_admin or not is_bootstrap_admin(user):
+        return
+    user.is_admin = True
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+
+def seed_bootstrap_admins() -> None:
+    emails = admin_email_set()
+    if not emails:
+        return
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.email.in_(emails), User.is_admin.is_(False)).update(
+            {User.is_admin: True},
+            synchronize_session=False,
+        )
+        db.commit()
+    finally:
+        db.close()
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:

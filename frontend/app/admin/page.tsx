@@ -9,9 +9,16 @@ import { JobCharts } from "@/components/JobCharts";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ApiError, api } from "@/lib/api";
 import { addressCount, emptyJobStats, primaryAddress } from "@/lib/jobs";
-import type { AdminJob, AdminStats, AdminUser } from "@/lib/types";
+import type { AdminJob, AdminStats, AdminUser, User } from "@/lib/types";
 
-type Tab = "overview" | "users" | "jobs";
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "users", label: "Users" },
+  { id: "subscribers", label: "Subscribers" },
+  { id: "jobs", label: "Jobs" },
+] as const;
+
+type Tab = (typeof TABS)[number]["id"];
 
 const JOB_STATUS_FILTERS = ["all", "queued", "running", "completed", "failed"] as const;
 
@@ -24,30 +31,57 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function SubBadge({ status }: { status: string | null }) {
+  const key = (status ?? "").toLowerCase();
+  const styles: Record<string, string> = {
+    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    trialing: "bg-blue-50 text-blue-700 border-blue-200",
+    past_due: "bg-amber-50 text-amber-700 border-amber-200",
+    canceled: "bg-slate-100 text-slate-600 border-slate-200",
+    unpaid: "bg-red-50 text-red-700 border-red-200",
+  };
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium capitalize ${styles[key] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+      {status ? status.replace("_", " ") : "None"}
+    </span>
+  );
+}
+
 function AdminContent() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
+  const [me, setMe] = useState<User | null>(null);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [subscribers, setSubscribers] = useState<AdminUser[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [error, setError] = useState("");
   const [userQuery, setUserQuery] = useState("");
+  const [subQuery, setSubQuery] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [jobStatus, setJobStatus] = useState<(typeof JOB_STATUS_FILTERS)[number]>("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const me = await api.me();
-      if (!me.is_admin) {
+      const profile = await api.me();
+      if (!profile.is_admin) {
         setAllowed(false);
         router.replace("/dashboard");
         return;
       }
+      setMe(profile);
       setAllowed(true);
-      const [s, u, j] = await Promise.all([api.adminStats(), api.adminUsers(), api.adminJobs()]);
+      const [s, u, sub, j] = await Promise.all([
+        api.adminStats(),
+        api.adminUsers(),
+        api.adminSubscribers(),
+        api.adminJobs(),
+      ]);
       setStats(s);
       setUsers(u);
+      setSubscribers(sub);
       setJobs(j);
       setError("");
     } catch (err) {
@@ -71,6 +105,15 @@ function AdminContent() {
     return users.filter((u) => u.email.toLowerCase().includes(q));
   }, [users, userQuery]);
 
+  const filteredSubscribers = useMemo(() => {
+    const q = subQuery.trim().toLowerCase();
+    if (!q) return subscribers;
+    return subscribers.filter((u) => {
+      const hay = [u.email, u.plan_label ?? "", u.subscription_status ?? ""].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [subscribers, subQuery]);
+
   const filteredJobs = useMemo(() => {
     const q = jobQuery.trim().toLowerCase();
     return jobs.filter((job) => {
@@ -82,6 +125,23 @@ function AdminContent() {
       return hay.includes(q);
     });
   }, [jobs, jobQuery, jobStatus]);
+
+  async function toggleAdmin(user: AdminUser) {
+    const next = !user.is_admin;
+    const action = next ? `Give admin access to ${user.email}?` : `Remove admin access from ${user.email}?`;
+    if (!window.confirm(action)) return;
+    setBusyId(user.id);
+    setError("");
+    try {
+      const updated = await api.setAdminAccess(user.id, next);
+      setUsers((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+      setSubscribers((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update admin access");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (allowed !== true) {
     return (
@@ -98,19 +158,19 @@ function AdminContent() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin</h1>
-          <p className="mt-1 text-sm text-slate-500">All users and jobs across SnapShot</p>
+          <p className="mt-1 text-sm text-slate-500">Users, subscribers, and jobs across SnapShot</p>
         </div>
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {(["overview", "users", "jobs"] as const).map((id) => (
+        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+          {TABS.map((item) => (
             <button
-              key={id}
+              key={item.id}
               type="button"
-              onClick={() => setTab(id)}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold capitalize ${
-                tab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+              onClick={() => setTab(item.id)}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
+                tab === item.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              {id}
+              {item.label}
             </button>
           ))}
         </div>
@@ -148,12 +208,15 @@ function AdminContent() {
 
       {tab === "users" && (
         <>
+          <p className="mt-6 text-sm text-slate-500">
+            Grant or remove admin access here. The other person only needs to refresh the site.
+          </p>
           <input
             type="search"
             value={userQuery}
             onChange={(e) => setUserQuery(e.target.value)}
             placeholder="Search users by email…"
-            className="input mt-6 sm:max-w-xs"
+            className="input mt-3 sm:max-w-xs"
           />
           <div className="card mt-3 overflow-hidden">
             {filteredUsers.length === 0 ? (
@@ -166,30 +229,110 @@ function AdminContent() {
                       Email
                     </th>
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Role
+                    </th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Subscription
                     </th>
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Jobs
                     </th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.map((user) => {
+                    const self = me?.id === user.id;
+                    const locked = Boolean(user.is_bootstrap_admin) && user.is_admin;
+                    return (
+                      <tr key={user.id} className="hover:bg-slate-50">
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-slate-800">{user.email}</p>
+                          <p className="text-xs text-slate-400">
+                            {self ? "You · " : ""}
+                            {user.is_active ? "Active" : "Disabled"}
+                          </p>
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">{user.is_admin ? "Admin" : "User"}</td>
+                        <td className="px-5 py-4">
+                          <SubBadge status={user.subscription_status} />
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">{user.job_count}</td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            type="button"
+                            disabled={busyId === user.id || (user.is_admin && (self || locked))}
+                            onClick={() => toggleAdmin(user)}
+                            className="btn btn-ghost px-3 py-1.5 text-xs"
+                            title={
+                              self
+                                ? "You cannot remove your own admin access"
+                                : locked
+                                  ? "This admin is set on the server and cannot be removed here"
+                                  : undefined
+                            }
+                          >
+                            {busyId === user.id ? "Saving…" : user.is_admin ? "Remove admin" : "Make admin"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === "subscribers" && (
+        <>
+          <p className="mt-6 text-sm text-slate-500">
+            Accounts with an active or trialing subscription ({subscribers.length}).
+          </p>
+          <input
+            type="search"
+            value={subQuery}
+            onChange={(e) => setSubQuery(e.target.value)}
+            placeholder="Search subscribers by email or plan…"
+            className="input mt-3 sm:max-w-xs"
+          />
+          <div className="card mt-3 overflow-hidden">
+            {filteredSubscribers.length === 0 ? (
+              <p className="px-5 py-10 text-center text-sm text-slate-500">No subscribed users to show.</p>
+            ) : (
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Email
+                    </th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Status
+                    </th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Plan
+                    </th>
                     <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell">
-                      Joined
+                      Renews
+                    </th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Jobs
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((user) => (
+                  {filteredSubscribers.map((user) => (
                     <tr key={user.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-4 font-medium text-slate-800">{user.email}</td>
                       <td className="px-5 py-4">
-                        <p className="font-medium text-slate-800">{user.email}</p>
-                        <p className="text-xs text-slate-400">
-                          {user.is_admin ? "Admin" : user.is_active ? "Active" : "Disabled"}
-                        </p>
+                        <SubBadge status={user.subscription_status} />
                       </td>
-                      <td className="px-5 py-4 capitalize text-slate-600">{user.subscription_status ?? "—"}</td>
-                      <td className="px-5 py-4 text-slate-600">{user.job_count}</td>
+                      <td className="px-5 py-4 text-slate-600">{user.plan_label ?? "—"}</td>
                       <td className="hidden px-5 py-4 text-slate-500 sm:table-cell">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {user.current_period_end ? new Date(user.current_period_end).toLocaleDateString() : "—"}
                       </td>
+                      <td className="px-5 py-4 text-slate-600">{user.job_count}</td>
                     </tr>
                   ))}
                 </tbody>
