@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # Local dev only — set false in production
     bypass_subscription_check: bool = False
 
+    # Comma-separated emails that can open the admin panel
+    admin_emails: str = ""
+
     aws_region: str = "eu-north-1"
     s3_bucket_name: str = ""
     aws_access_key_id: str = ""

@@ -5,21 +5,36 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AuthGuard } from "@/components/AuthGuard";
+import { JobCharts } from "@/components/JobCharts";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
+import { addressCount, jobAddresses, primaryAddress, statsFromJobs } from "@/lib/jobs";
 import type { Job } from "@/lib/types";
 
 const STATUS_FILTERS = [
   { id: "all", label: "All" },
   { id: "active", label: "Active" },
+  { id: "queued", label: "Queued" },
+  { id: "running", label: "Running" },
   { id: "completed", label: "Completed" },
   { id: "failed", label: "Failed" },
 ] as const;
 
+const DATE_FILTERS = [
+  { id: "all", label: "All time" },
+  { id: "7d", label: "Last 7 days", days: 7 },
+  { id: "30d", label: "Last 30 days", days: 30 },
+  { id: "90d", label: "Last 90 days", days: 90 },
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTERS)[number]["id"];
+type DateFilter = (typeof DATE_FILTERS)[number]["id"];
+type SortKey = "address" | "addresses" | "status" | "created_at";
+
 const DISMISS_KEY = "snapshot_onboarding_dismissed";
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
   return (
     <div className="card p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
@@ -28,14 +43,32 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   );
 }
 
-function primaryAddress(job: Job): string {
-  const addrs = job.inputs?.addresses;
-  if (Array.isArray(addrs) && addrs.length > 0) {
-    const first = String(addrs[0]);
-    const more = addrs.length > 1 ? ` +${addrs.length - 1}` : "";
-    return first + more;
-  }
-  return "—";
+function SortHeader({
+  label,
+  column,
+  sortKey,
+  sortDir,
+  onSort,
+  className = "",
+}: {
+  label: string;
+  column: SortKey;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = sortKey === column;
+  return (
+    <th className={`px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 ${className}`}>
+      <button type="button" onClick={() => onSort(column)} className="inline-flex items-center gap-1 hover:text-slate-800">
+        {label}
+        <span className={active ? "text-brand-600" : "text-slate-300"}>
+          {active && sortDir === "asc" ? "↑" : "↓"}
+        </span>
+      </button>
+    </th>
+  );
 }
 
 function DashboardContent() {
@@ -47,7 +80,10 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]["id"]>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const load = useCallback(async () => {
@@ -82,34 +118,51 @@ function DashboardContent() {
     return () => clearInterval(id);
   }, [jobs, load]);
 
-  const stats = useMemo(() => {
-    return {
-      total: jobs.length,
-      active: jobs.filter((j) => j.status === "queued" || j.status === "running").length,
-      completed: jobs.filter((j) => j.status === "completed").length,
-      failed: jobs.filter((j) => j.status === "failed").length,
-    };
-  }, [jobs]);
+  const stats = useMemo(() => statsFromJobs(jobs), [jobs]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return jobs.filter((job) => {
+    const dateDef = DATE_FILTERS.find((d) => d.id === dateFilter);
+    const cutoff =
+      dateDef && "days" in dateDef && dateDef.days
+        ? Date.now() - dateDef.days * 24 * 60 * 60 * 1000
+        : null;
+
+    const rows = jobs.filter((job) => {
       if (statusFilter === "active" && job.status !== "queued" && job.status !== "running") return false;
-      if (statusFilter === "completed" && job.status !== "completed") return false;
-      if (statusFilter === "failed" && job.status !== "failed") return false;
+      if (statusFilter !== "all" && statusFilter !== "active" && job.status !== statusFilter) return false;
+      if (cutoff && new Date(job.created_at).getTime() < cutoff) return false;
       if (!q) return true;
       const hay = [
         primaryAddress(job),
         job.status,
         job.source_url ?? "",
         job.id,
-        ...(Array.isArray(job.inputs?.addresses) ? job.inputs.addresses.map(String) : []),
+        ...jobAddresses(job),
       ]
         .join(" ")
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [jobs, query, statusFilter]);
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      if (sortKey === "address") return primaryAddress(a).localeCompare(primaryAddress(b)) * dir;
+      if (sortKey === "addresses") return (addressCount(a) - addressCount(b)) * dir;
+      if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
+      return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
+    });
+    return rows;
+  }, [jobs, query, statusFilter, dateFilter, sortKey, sortDir]);
+
+  function onSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === "created_at" ? "desc" : "asc");
+  }
 
   function dismissOnboarding() {
     localStorage.setItem(DISMISS_KEY, "1");
@@ -141,12 +194,25 @@ function DashboardContent() {
       )}
 
       {!loading && jobs.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total" value={stats.total} accent="text-slate-900" />
-          <StatCard label="Active" value={stats.active} accent="text-blue-600" />
-          <StatCard label="Completed" value={stats.completed} accent="text-emerald-600" />
-          <StatCard label="Failed" value={stats.failed} accent="text-red-600" />
-        </div>
+        <>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            <StatCard label="Total" value={stats.total} accent="text-slate-900" />
+            <StatCard label="Active" value={stats.queued + stats.running} accent="text-blue-600" />
+            <StatCard label="Completed" value={stats.completed} accent="text-emerald-600" />
+            <StatCard label="Failed" value={stats.failed} accent="text-red-600" />
+            <StatCard label="Success rate" value={`${stats.success_rate}%`} accent="text-slate-900" />
+            <StatCard label="Addresses run" value={stats.addresses_completed} accent="text-slate-900" />
+          </div>
+          <JobCharts
+            daily={stats.daily}
+            counts={{
+              completed: stats.completed,
+              failed: stats.failed,
+              queued: stats.queued,
+              running: stats.running,
+            }}
+          />
+        </>
       )}
 
       {error && (
@@ -181,14 +247,27 @@ function DashboardContent() {
         </div>
       ) : (
         <>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by address…"
-              className="input sm:max-w-xs"
-            />
+          <div className="mt-6 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search address, URL, or job ID…"
+                className="input sm:max-w-xs"
+              />
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                className="input sm:max-w-[10rem]"
+              >
+                {DATE_FILTERS.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {STATUS_FILTERS.map((f) => (
                 <button
@@ -207,16 +286,37 @@ function DashboardContent() {
             </div>
           </div>
 
-          <div className="card mt-4 overflow-hidden">
+          <p className="mt-3 text-xs text-slate-500">
+            Showing {filtered.length} of {jobs.length} jobs
+            {stats.this_month ? ` · ${stats.this_month} this month` : ""}
+            {stats.last_30_days ? ` · ${stats.last_30_days} in the last 30 days` : ""}
+          </p>
+
+          <div className="card mt-3 overflow-hidden">
             {filtered.length === 0 ? (
-              <p className="px-5 py-10 text-center text-sm text-slate-500">No jobs match that search.</p>
+              <p className="px-5 py-10 text-center text-sm text-slate-500">No jobs match those filters.</p>
             ) : (
               <table className="min-w-full divide-y divide-slate-100 text-sm">
                 <thead>
                   <tr className="bg-slate-50/80">
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Address</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell">Created</th>
+                    <SortHeader label="Address" column="address" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                    <SortHeader
+                      label="Qty"
+                      column="addresses"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      className="hidden sm:table-cell"
+                    />
+                    <SortHeader label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                    <SortHeader
+                      label="Created"
+                      column="created_at"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      className="hidden sm:table-cell"
+                    />
                     <th className="px-5 py-3" />
                   </tr>
                 </thead>
@@ -230,6 +330,7 @@ function DashboardContent() {
                       <td className="max-w-xs truncate px-5 py-4 font-medium text-slate-800">
                         {primaryAddress(job)}
                       </td>
+                      <td className="hidden px-5 py-4 text-slate-500 sm:table-cell">{addressCount(job)}</td>
                       <td className="px-5 py-4">
                         <StatusBadge status={job.status} />
                       </td>

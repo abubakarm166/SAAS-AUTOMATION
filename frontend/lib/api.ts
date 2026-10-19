@@ -10,12 +10,16 @@ function redirectToLogin() {
   window.location.replace(`/login?expired=1&next=${next}`);
 }
 import type {
+  AdminJob,
+  AdminStats,
+  AdminUser,
   BillingConfig,
   CheckoutSession,
   ExtractedAddresses,
   FileDownload,
   Job,
   JobFile,
+  JobStats,
   MessageResponse,
   PortalSession,
   Subscription,
@@ -102,6 +106,14 @@ export const api = {
   me: () => request<User>("/auth/me"),
 
   listJobs: () => request<Job[]>("/jobs"),
+
+  getJobStats: () => request<JobStats>("/jobs/stats"),
+
+  adminStats: () => request<AdminStats>("/admin/stats"),
+
+  adminUsers: () => request<AdminUser[]>("/admin/users"),
+
+  adminJobs: () => request<AdminJob[]>("/admin/jobs"),
 
   getJob: (id: string) => request<Job>(`/jobs/${id}`),
 

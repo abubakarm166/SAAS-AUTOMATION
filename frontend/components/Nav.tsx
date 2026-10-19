@@ -36,6 +36,7 @@ export function Nav() {
   }
 
   const initial = user?.email?.[0]?.toUpperCase() ?? "?";
+  const navLinks = user?.is_admin ? [...links, { href: "/admin", label: "Admin" }] : links;
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
@@ -45,7 +46,7 @@ export function Nav() {
             <Logo size={48} />
           </Link>
           <nav className="hidden items-center gap-1 sm:flex">
-            {links.map((l) => {
+            {navLinks.map((l) => {
               const active = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
                 <Link
@@ -90,7 +91,7 @@ export function Nav() {
                   <p className="truncate text-sm font-medium text-slate-800">{user?.email}</p>
                 </div>
                 <nav className="flex flex-col p-1 sm:hidden">
-                  {links.map((l) => (
+                  {navLinks.map((l) => (
                     <Link
                       key={l.href}
                       href={l.href}

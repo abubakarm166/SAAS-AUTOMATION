@@ -20,6 +20,7 @@ class UserOut(BaseModel):
     is_verified: bool
     is_active: bool
     created_at: datetime
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -121,5 +122,55 @@ class SubscriptionOut(BaseModel):
     status: str
     plan_id: str | None
     current_period_end: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class DailyCount(BaseModel):
+    date: str
+    count: int
+
+
+class JobStatsOut(BaseModel):
+    total: int
+    queued: int
+    running: int
+    completed: int
+    failed: int
+    canceled: int
+    addresses_total: int
+    addresses_completed: int
+    success_rate: float
+    this_month: int
+    last_30_days: int
+    daily: list[DailyCount]
+
+
+class AdminStatsOut(JobStatsOut):
+    users_total: int
+    subscribers_active: int
+
+
+class AdminUserOut(BaseModel):
+    id: UUID
+    email: EmailStr
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    job_count: int
+    subscription_status: str | None
+
+
+class AdminJobOut(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_email: EmailStr
+    status: str
+    source_url: str | None
+    inputs: dict
+    error_message: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}

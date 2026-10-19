@@ -4,6 +4,7 @@ export interface User {
   is_verified: boolean;
   is_active: boolean;
   created_at: string;
+  is_admin?: boolean;
 }
 
 export interface TokenResponse {
@@ -85,6 +86,46 @@ export interface BillingConfig {
 
 export interface MessageResponse {
   message: string;
+}
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface JobStats {
+  total: number;
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  canceled: number;
+  addresses_total: number;
+  addresses_completed: number;
+  success_rate: number;
+  this_month: number;
+  last_30_days: number;
+  daily: DailyCount[];
+}
+
+export interface AdminStats extends JobStats {
+  users_total: number;
+  subscribers_active: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at: string;
+  job_count: number;
+  subscription_status: string | null;
+}
+
+export interface AdminJob extends Job {
+  user_id: string;
+  user_email: string;
 }
 
 export const DEFAULT_JOB_INPUTS: JobInputs = {

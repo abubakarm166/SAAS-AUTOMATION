@@ -20,8 +20,8 @@ Capture the current page URL, scan for US property addresses, and submit jobs to
 
 1. Click extension **⚙ Settings** (or right-click icon → Options)
 2. Set:
-   - **API base URL:** `http://16.170.241.9/api` (nginx proxy) or `http://16.170.241.9:8000` (direct)
-   - **Dashboard URL:** `http://16.170.241.9`
+   - **API base URL:** `https://snapshotanalytics.io/api`
+   - **Dashboard URL:** `https://snapshotanalytics.io`
 3. Sign in with your SnapShot email/password
 
 ## Usage

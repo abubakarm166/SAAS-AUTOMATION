@@ -19,9 +19,13 @@ async function apiRequest(path, options = {}, auth = true) {
 
   if (!response.ok) {
     const detail = body?.detail ?? response.statusText;
-    const message = Array.isArray(detail)
+    let message = Array.isArray(detail)
       ? detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
       : String(detail);
+    if (response.status === 405) {
+      message =
+        "Method Not Allowed — open ⚙ Settings and set API base URL to https://snapshotanalytics.io/api";
+    }
     const error = new Error(message);
     error.status = response.status;
     throw error;

@@ -6,15 +6,35 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULTS = {
-  apiUrl: "http://16.170.241.9/api",
-  dashboardUrl: "http://16.170.241.9",
+  apiUrl: "https://snapshotanalytics.io/api",
+  dashboardUrl: "https://snapshotanalytics.io",
 };
+
+function normalizeApiUrl(raw) {
+  let url = (raw || DEFAULTS.apiUrl).trim().replace(/\/$/, "");
+  if (!url) url = DEFAULTS.apiUrl;
+  if (/^https?:\/\/16\.170\.241\.9(?::8000)?$/i.test(url) || /^https?:\/\/16\.170\.241\.9\/api$/i.test(url)) {
+    url = DEFAULTS.apiUrl;
+  }
+  if (/^https?:\/\/snapshotanalytics\.io$/i.test(url)) {
+    url = `${url}/api`;
+  }
+  return url.replace(/\/$/, "");
+}
+
+function normalizeDashboardUrl(raw) {
+  let url = (raw || DEFAULTS.dashboardUrl).trim().replace(/\/$/, "");
+  if (!url || /^https?:\/\/16\.170\.241\.9(?::3000)?$/i.test(url)) {
+    url = DEFAULTS.dashboardUrl;
+  }
+  return url.replace(/\/$/, "");
+}
 
 async function getSettings() {
   const data = await chrome.storage.sync.get(Object.values(STORAGE_KEYS));
   return {
-    apiUrl: (data[STORAGE_KEYS.apiUrl] || DEFAULTS.apiUrl).replace(/\/$/, ""),
-    dashboardUrl: (data[STORAGE_KEYS.dashboardUrl] || DEFAULTS.dashboardUrl).replace(/\/$/, ""),
+    apiUrl: normalizeApiUrl(data[STORAGE_KEYS.apiUrl] || DEFAULTS.apiUrl),
+    dashboardUrl: normalizeDashboardUrl(data[STORAGE_KEYS.dashboardUrl] || DEFAULTS.dashboardUrl),
     token: data[STORAGE_KEYS.token] || "",
     email: data[STORAGE_KEYS.email] || "",
   };
@@ -22,9 +42,9 @@ async function getSettings() {
 
 async function saveSettings(partial) {
   const payload = {};
-  if (partial.apiUrl !== undefined) payload[STORAGE_KEYS.apiUrl] = partial.apiUrl.replace(/\/$/, "");
+  if (partial.apiUrl !== undefined) payload[STORAGE_KEYS.apiUrl] = normalizeApiUrl(partial.apiUrl);
   if (partial.dashboardUrl !== undefined) {
-    payload[STORAGE_KEYS.dashboardUrl] = partial.dashboardUrl.replace(/\/$/, "");
+    payload[STORAGE_KEYS.dashboardUrl] = normalizeDashboardUrl(partial.dashboardUrl);
   }
   if (partial.token !== undefined) payload[STORAGE_KEYS.token] = partial.token;
   if (partial.email !== undefined) payload[STORAGE_KEYS.email] = partial.email;

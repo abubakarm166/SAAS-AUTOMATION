@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.auth import create_access_token, get_current_user, hash_password, is_admin_user, verify_password
 from app.config import settings
 from app.database import get_db
 from app.email_service import send_email, smtp_configured
@@ -23,6 +23,10 @@ from app.schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut.model_validate(user).model_copy(update={"is_admin": is_admin_user(user)})
 
 
 def _hash_token(token: str) -> str:
@@ -44,7 +48,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(Subscription(user_id=user.id))
     db.commit()
     db.refresh(user)
-    return user
+    return _user_out(user)
 
 
 @router.post("/login", response_model=Token)
@@ -58,7 +62,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
-    return user
+    return _user_out(user)
 
 
 @router.post("/forgot-password", response_model=MessageOut)

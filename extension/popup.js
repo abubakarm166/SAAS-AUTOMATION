@@ -22,6 +22,21 @@ const els = {
 
 let pollTimer = null;
 
+async function openDashboardJobs() {
+  const { dashboardUrl } = await getSettings();
+  const base = dashboardUrl.replace(/\/$/, "") || "https://snapshotanalytics.io";
+  const url = `${base}/dashboard`;
+  const existing = await chrome.tabs.query({ url: `${base}/*` });
+  if (existing[0]?.id) {
+    await chrome.tabs.update(existing[0].id, { url, active: true });
+    if (existing[0].windowId != null) {
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
 function showMessage(text, type = "error") {
   els.message.textContent = text;
   els.message.className = `message ${type}`;
@@ -162,8 +177,6 @@ async function submitJob() {
       },
     };
     const job = await createJob(payload);
-    const { dashboardUrl } = await getSettings();
-    els.dashboardLink.href = `${dashboardUrl}/jobs/${job.id}`;
     els.statusTitle.textContent = `Job ${job.status}`;
     els.statusDetail.textContent = `Job ID: ${job.id}`;
     showPanel(els.statusPanel);
@@ -206,6 +219,9 @@ async function init() {
     els.addressList.appendChild(createAddressRow());
   });
   els.submitBtn.addEventListener("click", submitJob);
+  els.dashboardLink.addEventListener("click", () => {
+    void openDashboardJobs();
+  });
   els.newJobBtn.addEventListener("click", async () => {
     stopPolling();
     clearMessage();

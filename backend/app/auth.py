@@ -55,3 +55,17 @@ def require_active_subscription(user: User = Depends(get_current_user)) -> User:
     if not subscription or subscription.status not in {SubscriptionStatus.active, SubscriptionStatus.trialing}:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Active subscription required")
     return user
+
+
+def admin_email_set() -> set[str]:
+    return {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
+
+
+def is_admin_user(user: User) -> bool:
+    return user.email.lower() in admin_email_set()
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not is_admin_user(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user

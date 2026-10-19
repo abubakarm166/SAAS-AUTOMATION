@@ -5,13 +5,22 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_active_subscription
+from app.auth import get_current_user, is_admin_user, require_active_subscription
 from app.config import settings
 from app.database import get_db
+from app.job_stats import summarize_jobs
 from app.models import Job, JobFile, JobStatus, User
 from app.queue import enqueue_snapshot_job
 from app.address_capture import AddressCaptureError, capture_addresses_from_url
-from app.schemas import ExtractAddressesOut, ExtractAddressesRequest, FileDownloadOut, JobCreate, JobFileOut, JobOut
+from app.schemas import (
+    ExtractAddressesOut,
+    ExtractAddressesRequest,
+    FileDownloadOut,
+    JobCreate,
+    JobFileOut,
+    JobOut,
+    JobStatsOut,
+)
 from app.storage import create_presigned_download_url, s3_configured
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -95,19 +104,27 @@ def list_jobs(user: User = Depends(get_current_user), db: Session = Depends(get_
     return jobs
 
 
-@router.get("/{job_id}", response_model=JobOut)
-def get_job(job_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id, Job.user_id == user.id).first()
-    if not job:
+@router.get("/stats", response_model=JobStatsOut)
+def job_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    jobs = db.query(Job).filter(Job.user_id == user.id).all()
+    return summarize_jobs(jobs)
+
+
+def _owned_or_admin_job(job_id: UUID, user: User, db: Session) -> Job:
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job or (job.user_id != user.id and not is_admin_user(user)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     return job
 
 
+@router.get("/{job_id}", response_model=JobOut)
+def get_job(job_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _owned_or_admin_job(job_id, user, db)
+
+
 @router.get("/{job_id}/files", response_model=list[JobFileOut])
 def list_job_files(job_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id, Job.user_id == user.id).first()
-    if not job:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    job = _owned_or_admin_job(job_id, user, db)
     return db.query(JobFile).filter(JobFile.job_id == job.id).order_by(JobFile.created_at.asc()).all()
 
 
@@ -120,10 +137,12 @@ def download_job_file(
 ):
     job_file = (
         db.query(JobFile)
-        .filter(JobFile.id == file_id, JobFile.job_id == job_id, JobFile.user_id == user.id)
+        .filter(JobFile.id == file_id, JobFile.job_id == job_id)
         .first()
     )
     if not job_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if job_file.user_id != user.id and not is_admin_user(user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     if not job_file.s3_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not available in storage")
