@@ -1,10 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import seed_bootstrap_admins
 from app.config import settings
+from app.database import ensure_schema
 from app.routers import admin, auth, billing, health, jobs, worker
 
-app = FastAPI(title="SnapShot API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_schema()
+    seed_bootstrap_admins()
+    yield
+
+
+app = FastAPI(title="SnapShot API", version="0.1.0", lifespan=lifespan)
 
 _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 if settings.frontend_url and settings.frontend_url not in _cors_origins:

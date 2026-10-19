@@ -156,9 +156,17 @@ class AdminUserOut(BaseModel):
     email: EmailStr
     is_active: bool
     is_admin: bool
+    is_bootstrap_admin: bool = False
     created_at: datetime
     job_count: int
     subscription_status: str | None
+    plan_id: str | None = None
+    plan_label: str | None = None
+    current_period_end: datetime | None = None
+
+
+class AdminUserUpdate(BaseModel):
+    is_admin: bool
 
 
 class AdminJobOut(BaseModel):

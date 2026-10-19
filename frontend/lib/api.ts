@@ -113,6 +113,14 @@ export const api = {
 
   adminUsers: () => request<AdminUser[]>("/admin/users"),
 
+  adminSubscribers: () => request<AdminUser[]>("/admin/subscribers"),
+
+  setAdminAccess: (userId: string, isAdmin: boolean) =>
+    request<AdminUser>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_admin: isAdmin }),
+    }),
+
   adminJobs: () => request<AdminJob[]>("/admin/jobs"),
 
   getJob: (id: string) => request<Job>(`/jobs/${id}`),
