@@ -176,13 +176,28 @@ def create_portal_session(user: User = Depends(get_current_user), db: Session = 
     """Stripe Customer Portal — manage payment method, cancel, invoices."""
     _ensure_stripe()
     subscription = _get_or_create_subscription_row(db, user)
-    if not subscription.stripe_customer_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No Stripe customer on file. Subscribe first.")
 
-    portal = stripe.billing_portal.Session.create(
-        customer=subscription.stripe_customer_id,
-        return_url=f"{settings.frontend_url.rstrip('/')}/billing",
-    )
+    try:
+        customer_id = _ensure_stripe_customer(db, user, subscription)
+        portal = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=f"{settings.frontend_url.rstrip('/')}/billing",
+        )
+    except stripe.InvalidRequestError as exc:
+        message = getattr(exc, "user_message", None) or str(exc)
+        lowered = message.lower()
+        if "portal" in lowered or "configuration" in lowered:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Stripe Customer Portal is not enabled in live mode. In Stripe: Settings → Billing → Customer portal → activate and Save.",
+            ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+    except stripe.StripeError as exc:
+        detail = getattr(exc, "user_message", None) or str(exc)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+
+    if not portal.url:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stripe did not return a portal URL")
     return {"portal_url": portal.url}
 
 
